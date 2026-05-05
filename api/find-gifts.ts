@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { findGifts } from '../src/services/findGifts.js';
 import type { GiftAnswers } from '../src/services/findGifts.js';
 
@@ -14,6 +15,8 @@ type VercelResponse = {
   json(body: unknown): void;
   end(): void;
 };
+
+let supabaseAuthClient: SupabaseClient<any, any, any> | null = null;
 
 function getHeader(req: VercelRequest, name: string): string | undefined {
   const headerName = name.toLowerCase();
@@ -54,12 +57,22 @@ function getSupabaseAuthClient() {
     throw new Error('Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_ANON_KEY/VITE_SUPABASE_ANON_KEY');
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  if (process.env.NODE_ENV !== 'test' && supabaseAuthClient) {
+    return supabaseAuthClient;
+  }
+
+  const client = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
   });
+
+  if (process.env.NODE_ENV !== 'test') {
+    supabaseAuthClient = client;
+  }
+
+  return client;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

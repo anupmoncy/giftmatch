@@ -10,9 +10,59 @@
     sans-serif;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   background: #fafafa;
+}
+
+.giftmatch-appear-question {
+  animation: giftmatch-appear 500ms ease forwards;
+  opacity: 0;
+  transform: translateY(1rem);
+}
+
+.giftmatch-submit::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  content: "";
+  inset: 0;
+  position: absolute;
+  transform: translateX(-100%);
+  transition: transform 600ms ease;
+}
+
+.giftmatch-submit:not(:disabled):hover::after {
+  transform: translateX(100%);
+}
+
+.giftmatch-submit-arrow {
+  display: inline-block;
+  transition: transform 200ms ease;
+}
+
+.giftmatch-submit:not(:disabled):hover .giftmatch-submit-arrow {
+  animation: giftmatch-arrow-bounce 600ms ease infinite;
+}
+
+@keyframes giftmatch-appear {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes giftmatch-arrow-bounce {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  50% {
+    transform: translateX(0.25rem);
+  }
 }

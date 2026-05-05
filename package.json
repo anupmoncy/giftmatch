@@ -25,6 +25,7 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@vitest/coverage-v8": "^4.1.5",
     "autoprefixer": "latest",
     "jsdom": "latest",
     "postcss": "latest",

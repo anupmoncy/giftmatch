@@ -1,0 +1,173 @@
+
+> giftmatch@0.0.0 test
+> vitest --run --reporter=verbose
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.5 [39m[90m/Users/anup-admin/giftsearch/giftmatch[39m
+
+ [32m✓[39m src/tests/admin.test.ts[2m > [22mGET /api/admin-runs[2m > [22mreturns 401 when no Authorization header is present[32m 31[2mms[22m[39m
+ [32m✓[39m src/tests/admin.test.ts[2m > [22mGET /api/admin-runs[2m > [22mreturns 403 when user is not admin[32m 1[2mms[22m[39m
+ [32m✓[39m src/tests/admin.test.ts[2m > [22mGET /api/admin-runs[2m > [22mreturns 200 with an array of runs when user is admin[32m 1[2mms[22m[39m
+ [32m✓[39m src/tests/admin.test.ts[2m > [22mGET /api/admin-runs[2m > [22mincludes email, quiz fields, model, and summary for each run[32m 1[2mms[22m[39m
+ [32m✓[39m src/tests/signUp.test.ts[2m > [22mPOST /api/sign-up[2m > [22mcreates a confirmed user with the provided username as the email[32m 32[2mms[22m[39m
+ [32m✓[39m src/tests/signUp.test.ts[2m > [22mPOST /api/sign-up[2m > [22mreturns 400 for a short password[32m 1[2mms[22m[39m
+[90mstderr[2m | src/tests/api.test.ts[2m > [22m[2mPOST /api/find-gifts[2m > [22m[2mreturns 500 when findGifts throws
+[22m[39mfind-gifts failed Error: OpenAI unavailable
+    at [90m/Users/anup-admin/giftsearch/giftmatch/[39msrc/tests/api.test.ts:149:47
+    at [90mfile:///Users/anup-admin/giftsearch/giftmatch/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/anup-admin/giftsearch/giftmatch/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/anup-admin/giftsearch/giftmatch/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/anup-admin/giftsearch/giftmatch/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/anup-admin/giftsearch/giftmatch/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/anup-admin/giftsearch/giftmatch/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/anup-admin/giftsearch/giftmatch/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2955:64
+
+ [32m✓[39m src/tests/api.test.ts[2m > [22mPOST /api/find-gifts[2m > [22mreturns 401 when no Authorization header and no demo header[32m 34[2mms[22m[39m
+ [32m✓[39m src/tests/api.test.ts[2m > [22mPOST /api/find-gifts[2m > [22mreturns 200 with valid GiftResult when a bearer token is valid[32m 4[2mms[22m[39m
+ [32m✓[39m src/tests/api.test.ts[2m > [22mPOST /api/find-gifts[2m > [22mreturns 400 when answers are missing or malformed[32m 1[2mms[22m[39m
+ [32m✓[39m src/tests/api.test.ts[2m > [22mPOST /api/find-gifts[2m > [22mreturns 500 when findGifts throws[32m 22[2mms[22m[39m
+ [32m✓[39m src/tests/api.test.ts[2m > [22mPOST /api/find-gifts[2m > [22malways includes rankedGifts and summary fields on success[32m 2[2mms[22m[39m
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mmaps budget filtering for under-25
+[22m[39m{"stage_timings_ms":{"catalog_fetch":1,"prompt_build":0,"openai_call":0,"parse_validate":1,"db_persist":0,"total":2}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mmaps budget filtering for 25-50
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":1,"parse_validate":0,"db_persist":0,"total":1}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mmaps budget filtering for 50to100
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":0}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mmaps budget filtering for splurge
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":0}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mmaps budget filtering for flexible
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":0}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mfetches catalog items from Supabase before calling OpenAI
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":1,"openai_call":0,"parse_validate":0,"db_persist":0,"total":1}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mreturns an empty result without calling OpenAI when the budget has no catalog matches
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":0}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2muses OPENAI_MODEL and falls back to gpt-4o-mini
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":1}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2muses OPENAI_MODEL and falls back to gpt-4o-mini
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":0}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2msends recipient, personality, budget, freeText, and catalog descriptions to OpenAI
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":0}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mparses and validates structured model output fields
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":0}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2minserts quiz_runs and recommendation_runs with the expected fields
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":0}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mreturns a valid GiftResult shape
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":0}}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mthrows a descriptive error when OpenAI returns malformed JSON
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":6,"total":6}}
+
+[90mstderr[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mhandles OpenAI 429 errors with the catalog fallback
+[22m[39mOpenAI ranking unavailable; using catalog fallback recommendations {
+  name: [90mundefined[39m,
+  message: [32m'Too many requests'[39m,
+  code: [90mundefined[39m,
+  status: [33m429[39m,
+  type: [90mundefined[39m,
+  stack: [90mundefined[39m,
+  cause: [90mundefined[39m,
+  response: [90mundefined[39m,
+  error: [90mundefined[39m,
+  details: {}
+}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mhandles OpenAI 429 errors with the catalog fallback
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":0,"db_persist":0,"total":3}}
+
+[90mstderr[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mfalls back to catalog ranking when OpenAI returns an unknown catalog item id
+[22m[39mOpenAI returned recommendations outside the fetched catalog; using catalog fallback recommendations {
+  name: [32m'Error'[39m,
+  message: [32m'Model returned unknown catalog_item_id: not-in-this-catalog'[39m,
+  code: [90mundefined[39m,
+  status: [90mundefined[39m,
+  type: [90mundefined[39m,
+  stack: [32m'Error: Model returned unknown catalog_item_id: not-in-this-catalog\n'[39m +
+    [32m'    at validateRankedItems (/Users/anup-admin/giftsearch/giftmatch/src/services/findGifts.ts:551:13)\n'[39m +
+    [32m'    at findGifts (/Users/anup-admin/giftsearch/giftmatch/src/services/findGifts.ts:799:7)\n'[39m +
+    [32m'    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n'[39m +
+    [32m'    at /Users/anup-admin/giftsearch/giftmatch/src/tests/findGifts.test.ts:386:20\n'[39m +
+    [32m'    at file:///Users/anup-admin/giftsearch/giftmatch/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20'[39m,
+  cause: [90mundefined[39m,
+  response: [90mundefined[39m,
+  error: [90mundefined[39m,
+  details: {}
+}
+
+[90mstdout[2m | src/tests/findGifts.test.ts[2m > [22m[2mfindGifts[2m > [22m[2mfalls back to catalog ranking when OpenAI returns an unknown catalog item id
+[22m[39m{"stage_timings_ms":{"catalog_fetch":0,"prompt_build":0,"openai_call":0,"parse_validate":1,"db_persist":0,"total":1}}
+
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mmaps budget filtering for under-25[32m 79[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mmaps budget filtering for 25-50[32m 1[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mmaps budget filtering for 50to100[32m 1[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mmaps budget filtering for splurge[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mmaps budget filtering for flexible[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mfetches catalog items from Supabase before calling OpenAI[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mreturns an empty result without calling OpenAI when the budget has no catalog matches[32m 1[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22muses OPENAI_MODEL and falls back to gpt-4o-mini[32m 1[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22msends recipient, personality, budget, freeText, and catalog descriptions to OpenAI[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mparses and validates structured model output fields[32m 1[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22minserts quiz_runs and recommendation_runs with the expected fields[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mreturns a valid GiftResult shape[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mthrows a descriptive error when OpenAI returns malformed JSON[32m 7[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mhandles OpenAI 429 errors with the catalog fallback[32m 4[2mms[22m[39m
+ [32m✓[39m src/tests/findGifts.test.ts[2m > [22mfindGifts[2m > [22mfalls back to catalog ranking when OpenAI returns an unknown catalog item id[32m 2[2mms[22m[39m
+(node:85943) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ [32m✓[39m src/tests/GiftCard.test.tsx[2m > [22mGiftCard[2m > [22mfalls back when the catalog image fails to load[32m 108[2mms[22m[39m
+ [32m✓[39m src/tests/GiftCard.test.tsx[2m > [22mGiftCard[2m > [22mfalls back when the catalog image URL is blank[32m 4[2mms[22m[39m
+ [32m✓[39m src/tests/App.test.tsx[2m > [22mApp[2m > [22mredirects to the login page by default[32m 97[2mms[22m[39m
+ [32m✓[39m src/tests/quiz.test.tsx[2m > [22mQuizPage[2m > [22mrenders all quiz questions on load[32m 117[2mms[22m[39m
+ [32m✓[39m src/tests/quiz.test.tsx[2m > [22mQuizPage[2m > [22msubmit is disabled until Q1-Q3 are answered[32m 66[2mms[22m[39m
+ [32m✓[39m src/tests/quiz.test.tsx[2m > [22mQuizPage[2m > [22msubmitting triggers findGifts with all answers[32m 75[2mms[22m[39m
+ [32m✓[39m src/tests/quiz.test.tsx[2m > [22mQuizPage[2m > [22msubmitting with blank Q4 triggers findGifts with empty freeText[32m 53[2mms[22m[39m
+[90mstderr[2m | src/tests/quiz.test.tsx[2m > [22m[2mQuizPage[2m > [22m[2mrenders a loading spinner while findGifts is in flight
+[22m[39mAn update to QuizPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to QuizPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ [32m✓[39m src/tests/quiz.test.tsx[2m > [22mQuizPage[2m > [22mrenders a loading spinner while findGifts is in flight[32m 51[2mms[22m[39m
+ [32m✓[39m src/tests/quiz.test.tsx[2m > [22mQuizPage[2m > [22mrenders results after findGifts resolves with ranked items[32m 60[2mms[22m[39m
+ [32m✓[39m src/tests/auth.test.ts[2m > [22mauth helpers[2m > [22mcheckAuth returns session when a valid session exists[32m 3[2mms[22m[39m
+ [32m✓[39m src/tests/auth.test.ts[2m > [22mauth helpers[2m > [22mcheckAuth returns null when no session exists[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/auth.test.ts[2m > [22mauth helpers[2m > [22mcheckAdmin returns true when profiles.role is admin[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/auth.test.ts[2m > [22mauth helpers[2m > [22mcheckAdmin returns false when profiles.role is user[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/auth.test.ts[2m > [22mauth helpers[2m > [22mcheckAdmin returns false when no session exists[32m 0[2mms[22m[39m
+ [32m✓[39m src/tests/quiz.test.tsx[2m > [22mQuizPage[2m > [22mrenders an error message when findGifts rejects[32m 55[2mms[22m[39m
+ [32m✓[39m src/tests/quiz.test.tsx[2m > [22mQuizPage[2m > [22mStart over resets to Q1[32m 66[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m8 passed[39m[22m[90m (8)[39m
+[2m      Tests [22m [1m[32m42 passed[39m[22m[90m (42)[39m
+[2m   Start at [22m 20:49:43
+[2m   Duration [22m 1.88s[2m (transform 608ms, setup 930ms, import 710ms, tests 996ms, environment 6.04s)[22m
+

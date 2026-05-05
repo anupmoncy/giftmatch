@@ -192,7 +192,7 @@ describe('findGifts', () => {
     await findGifts(answers, { userId: 'user-1' });
 
     expect(mockState.orderLog).toEqual(['catalog', 'openai']);
-    expect(mockState.limit).toHaveBeenCalledWith(1000);
+    expect(mockState.limit).toHaveBeenCalledWith(500);
   });
 
   it('returns an empty result without calling OpenAI when the budget has no catalog matches', async () => {

@@ -1,13 +1,16 @@
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 const PROMPT_VERSION = 'giftmatch-rank-v1';
 const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const RATE_LIMIT_FALLBACK_MODEL = 'catalog-rate-limit-fallback-v1';
 const MAX_RECOMMENDATIONS = 5;
-const CATALOG_FETCH_LIMIT = 1000;
-const MODEL_CATALOG_LIMIT = 40;
+const CATALOG_FETCH_LIMIT = 500;
+const MODEL_CATALOG_LIMIT = 24;
+const CATALOG_CACHE_TTL_MS = 60_000;
+const MODEL_MAX_OUTPUT_TOKENS = 800;
 
 const answersSchema = z.object({
   recipient: z.string().trim().min(1),
@@ -112,6 +115,15 @@ type StageTimings = {
   db_persist: number;
   total: number;
 };
+
+type CatalogCacheEntry = {
+  expiresAt: number;
+  catalog: CatalogItem[];
+};
+
+let supabaseAdminClient: SupabaseClient<any, any, any> | null = null;
+let openAIClient: OpenAI | null = null;
+const catalogCache = new Map<string, CatalogCacheEntry>();
 
 class ModelOutputParseError extends Error {
   constructor(message: string) {
@@ -223,16 +235,40 @@ function getSupabaseAdmin() {
     throw new Error('Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
   }
 
-  return createClient(supabaseUrl, serviceRoleKey, {
+  if (process.env.NODE_ENV !== 'test' && supabaseAdminClient) {
+    return supabaseAdminClient;
+  }
+
+  const client = createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
   });
+
+  if (process.env.NODE_ENV !== 'test') {
+    supabaseAdminClient = client;
+  }
+
+  return client;
 }
 
 function getOpenAIModel() {
   return getEnv('OPENAI_MODEL') ?? DEFAULT_OPENAI_MODEL;
+}
+
+function getOpenAIClient() {
+  if (process.env.NODE_ENV !== 'test' && openAIClient) {
+    return openAIClient;
+  }
+
+  const client = new OpenAI({ apiKey: getEnv('OPENAI_API_KEY') });
+
+  if (process.env.NODE_ENV !== 'test') {
+    openAIClient = client;
+  }
+
+  return client;
 }
 
 function isRateLimitError(error: unknown): boolean {
@@ -360,6 +396,16 @@ function parseBudgetRange(budget: string): BudgetRange {
 }
 
 async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogItem[]> {
+  const cacheKey = JSON.stringify({ min: range.min ?? null, max: range.max ?? null });
+
+  if (process.env.NODE_ENV !== 'test') {
+    const cached = catalogCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.catalog;
+    }
+  }
+
   let query = getSupabaseAdmin()
     .from('catalog')
     .select('id, name, description, price, image_url, brand, category, subcategory')
@@ -380,14 +426,22 @@ async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogIt
     throw error;
   }
 
-  return z.array(catalogItemSchema).parse(data ?? []);
+  const catalog = z.array(catalogItemSchema).parse(data ?? []);
+
+  if (process.env.NODE_ENV !== 'test') {
+    catalogCache.set(cacheKey, {
+      expiresAt: Date.now() + CATALOG_CACHE_TTL_MS,
+      catalog,
+    });
+  }
+
+  return catalog;
 }
 
 function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: CatalogItem[]): string {
   return JSON.stringify(
     {
       task: 'Rank only the provided catalog items for gift fit. Do not add items. Do not filter by budget; the list is already budget-filtered in code.',
-      answers,
       catalog: catalog.map((item) => ({
         catalog_item_id: item.id,
         name: item.name,
@@ -401,6 +455,7 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
         summary: 'Exactly 2 warm sentences.',
         recommendations: `Rank up to ${MAX_RECOMMENDATIONS} of the supplied catalog items. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates.`,
       },
+      answers,
     },
   );
 }
@@ -417,10 +472,12 @@ function buildOpenAIRankingPrompt(
 }
 
 async function requestModelRanking(prompt: string, model: string): Promise<string> {
-  const client = new OpenAI({ apiKey: getEnv('OPENAI_API_KEY') });
+  const client = getOpenAIClient();
   const response = await client.responses.create({
     model,
     input: prompt,
+    max_output_tokens: MODEL_MAX_OUTPUT_TOKENS,
+    prompt_cache_key: PROMPT_VERSION,
     text: {
       format: {
         type: 'json_schema',

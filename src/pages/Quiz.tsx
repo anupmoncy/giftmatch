@@ -27,6 +27,12 @@ export type QuizAnswers = {
 };
 
 const maxFreeTextLength = 300;
+const loadingMessages = [
+  'Scanning 30+ curated gifts...',
+  'Matching to personality type...',
+  'Ranking by relevance...',
+  'Almost there...',
+];
 
 const questions: SelectQuestion[] = [
   {
@@ -83,7 +89,14 @@ export function QuizPage() {
   const [freeText, setFreeText] = useState('');
   const [result, setResult] = useState<GiftResult | null>(null);
   const [error, setError] = useState('');
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const canSubmit = Boolean(answers.recipient && answers.personality && answers.budget);
+  const answeredQuestionCount =
+    Number(Boolean(answers.recipient)) +
+    Number(Boolean(answers.personality)) +
+    Number(Boolean(answers.budget)) +
+    Number(Boolean(freeText.trim()));
+  const progressPercent = (answeredQuestionCount / 4) * 100;
 
   useEffect(() => {
     let isMounted = true;
@@ -104,6 +117,19 @@ export function QuizPage() {
       isMounted = false;
     };
   }, [navigate]);
+
+  useEffect(() => {
+    if (phase !== 'loading') {
+      setLoadingMessageIndex(0);
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setLoadingMessageIndex((currentIndex) => (currentIndex + 1) % loadingMessages.length);
+    }, 1500);
+
+    return () => window.clearInterval(intervalId);
+  }, [phase]);
 
   async function submitQuiz(nextFreeText: string) {
     const completeAnswers = buildCompleteAnswers(answers, nextFreeText);
@@ -142,20 +168,22 @@ export function QuizPage() {
 
   if (phase === 'loading') {
     return (
-      <section className="px-4 pt-32 text-center">
-        <div className="relative mx-auto mb-6 h-20 w-20 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 animate-pulse">
-          <span
-            className="absolute inset-0 flex items-center justify-center text-3xl"
-            aria-hidden="true"
-          >
+      <section className="min-h-[calc(100vh-3.5rem)] bg-[linear-gradient(135deg,#F8F7FF_0%,#F0F9FF_100%)] px-4 pt-32 text-center">
+        <div className="relative mx-auto mb-8 h-24 w-24">
+          <div className="absolute inset-[-8px] rounded-full border-2 border-indigo-200 opacity-75 animate-ping" />
+          <div className="absolute inset-[-16px] rounded-full border border-indigo-100 opacity-40 animate-ping [animation-delay:300ms]" />
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-3xl">
             🎁
           </span>
         </div>
-        <h1 className="mt-4 text-xl font-semibold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900">
           Finding your perfect matches...
         </h1>
-        <p className="mt-2 animate-pulse text-sm text-gray-400">
+        <p className="mt-2 text-sm text-gray-400">
           Analysing your preferences against our catalog
+        </p>
+        <p className="mt-3 text-xs font-medium text-indigo-400 transition-opacity duration-500">
+          {loadingMessages[loadingMessageIndex]}
         </p>
       </section>
     );
@@ -222,105 +250,127 @@ export function QuizPage() {
   }
 
   return (
-    <section className="mx-auto max-w-2xl px-4 pb-16 pt-24">
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold text-gray-900">Find the perfect gift</h1>
-        <p className="mt-2 text-base text-gray-400">
-          Answer 4 quick questions and we'll match you instantly
-        </p>
+    <section className="min-h-[calc(100vh-3.5rem)] bg-[linear-gradient(135deg,#F8F7FF_0%,#F0F9FF_100%)] px-4 pb-16">
+      <div className="fixed left-0 right-0 top-14 z-40 h-[3px] bg-transparent">
+        <div
+          className="h-full bg-gradient-to-r from-indigo-400 to-purple-400 transition-[width] duration-[400ms] ease-[ease]"
+          style={{ width: `${progressPercent}%` }}
+        />
       </div>
 
-      {error ? (
-        <div className="mb-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-
-      <div>
-        {questions.map((question, index) => (
-          <div key={question.key} className="mb-8">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-indigo-500">
-              Question {index + 1}
-            </p>
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">{question.heading}</h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {question.options.map((option) => {
-                const isSelected = answers[question.key] === option.value;
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => handleSelect(question.key, option.value)}
-                    className={[
-                      'relative flex select-none flex-col items-center justify-center gap-1.5 rounded-2xl border-2 p-4 transition-all duration-150',
-                      isSelected
-                        ? 'border-indigo-500 bg-indigo-50 shadow-[0_0_0_3px_rgba(99,102,241,0.15)]'
-                        : 'border-gray-100 bg-white hover:border-indigo-200 hover:bg-indigo-50/30',
-                    ].join(' ')}
-                  >
-                    {isSelected ? (
-                      <span
-                        className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] text-white"
-                        aria-hidden="true"
-                      >
-                        ✓
-                      </span>
-                    ) : null}
-                    <span className="text-2xl leading-none" aria-hidden="true">
-                      {option.emoji}
-                    </span>
-                    <span
-                      className={[
-                        'mt-0.5 text-center text-xs font-medium',
-                        isSelected ? 'font-semibold text-indigo-700' : 'text-gray-600',
-                      ].join(' ')}
-                    >
-                      {option.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+      <div className="mx-auto max-w-2xl pt-28">
+        <div className="pb-4 text-center">
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-100 bg-white px-3 py-1 text-xs font-semibold text-indigo-500 shadow-sm">
+            <span aria-hidden="true">✨</span>
+            <span>Powered by AI</span>
           </div>
-        ))}
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">Find the perfect gift</h1>
+          <p className="mb-12 mt-2 text-base text-gray-400">
+            Answer 4 quick questions and we'll match you instantly
+          </p>
+        </div>
+
+        {error ? (
+          <div className="mb-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
 
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-indigo-500">
-            Question 4
-          </p>
-          <label
-            htmlFor="free-text-answer"
-            className="mb-4 block text-lg font-semibold text-gray-900"
-          >
-            Anything else we should know?
-          </label>
-          <textarea
-            id="free-text-answer"
-            value={freeText}
-            maxLength={maxFreeTextLength}
-            onChange={(event) => setFreeText(event.target.value)}
-            className="h-24 w-full resize-none rounded-2xl border-2 border-gray-100 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition placeholder:text-gray-300 focus:border-indigo-400"
-            placeholder="e.g. She loves plants and just got promoted..."
-          />
-          <p className="mt-1 text-right text-xs text-gray-300">
-            {freeText.length}/{maxFreeTextLength}
-          </p>
-        </div>
+          {questions.map((question, index) => (
+            <div
+              key={question.key}
+              className="giftmatch-appear-question mb-6"
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">
+                Question {index + 1}
+              </p>
+              <h2 className="mb-4 text-base font-semibold text-gray-800">{question.heading}</h2>
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                {question.options.map((option) => {
+                  const isSelected = answers[question.key] === option.value;
 
-        <button
-          type="button"
-          disabled={!canSubmit}
-          onClick={() => submitQuiz(freeText.trim())}
-          className={[
-            'mt-8 h-14 w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-base font-semibold text-white shadow-lg shadow-indigo-200 transition-all duration-200',
-            canSubmit
-              ? 'hover:-translate-y-0.5 hover:from-indigo-600 hover:to-purple-600 hover:shadow-xl hover:shadow-indigo-300 active:translate-y-0'
-              : 'cursor-not-allowed opacity-40',
-          ].join(' ')}
-        >
-          Find Perfect Gifts →
-        </button>
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => handleSelect(question.key, option.value)}
+                      className={[
+                        'group relative flex min-h-[72px] cursor-pointer select-none flex-col items-center justify-center gap-1 rounded-xl border border-gray-100 bg-white p-3 transition-all',
+                        isSelected
+                          ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-200 ring-offset-1'
+                          : 'hover:border-indigo-300 hover:bg-indigo-50/50',
+                      ].join(' ')}
+                    >
+                      {isSelected ? (
+                        <span
+                          className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] text-white shadow-sm"
+                          aria-hidden="true"
+                        >
+                          ✓
+                        </span>
+                      ) : null}
+                      <span className="text-xl leading-none" aria-hidden="true">
+                        {option.emoji}
+                      </span>
+                      <span className="text-center text-[11px] font-medium text-gray-500 group-hover:text-indigo-600">
+                        {option.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          <div
+            className="giftmatch-appear-question"
+            style={{ animationDelay: `${questions.length * 100}ms` }}
+          >
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">
+              Question 4
+            </p>
+            <label
+              htmlFor="free-text-answer"
+              className="mb-4 block text-base font-semibold text-gray-800"
+            >
+              Anything else we should know?
+            </label>
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <textarea
+                id="free-text-answer"
+                value={freeText}
+                maxLength={maxFreeTextLength}
+                onChange={(event) => setFreeText(event.target.value)}
+                className="h-20 w-full resize-none border-0 bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-300 focus:ring-0"
+                placeholder="e.g. She loves plants and just got promoted..."
+              />
+              <p className="text-right text-[11px] text-gray-300">
+                {freeText.length}/{maxFreeTextLength}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => submitQuiz(freeText.trim())}
+            className={[
+              'giftmatch-submit relative mt-8 h-14 w-full overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-base font-semibold text-white shadow-lg shadow-indigo-200 transition-all duration-200',
+              canSubmit
+                ? 'hover:-translate-y-0.5 hover:from-indigo-600 hover:to-purple-600 hover:shadow-xl hover:shadow-indigo-300 active:translate-y-0'
+                : 'cursor-not-allowed opacity-40',
+            ].join(' ')}
+          >
+            <span className="relative z-10 inline-flex items-center justify-center gap-1.5">
+              <span>Find Perfect Gifts</span>
+              <span className="giftmatch-submit-arrow" aria-hidden="true">
+                →
+              </span>
+            </span>
+          </button>
+        </div>
       </div>
     </section>
   );
