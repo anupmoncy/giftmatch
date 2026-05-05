@@ -13,7 +13,7 @@ const confidenceStyles = {
   low: 'border border-gray-200 bg-gray-50 text-gray-400',
 } satisfies Record<GiftRecommendation['confidence'], string>;
 
-const categoryFallbacks = {
+const categoryFallbacks: Record<string, { emoji: string; gradient: string }> = {
   Electronics: {
     emoji: '📱',
     gradient: 'from-blue-50 to-indigo-100',
@@ -38,7 +38,7 @@ const categoryFallbacks = {
     emoji: '📚',
     gradient: 'from-yellow-50 to-amber-100',
   },
-} satisfies Record<string, { emoji: string; gradient: string }>;
+};
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat('en-US', {
