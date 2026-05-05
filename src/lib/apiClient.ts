@@ -5,12 +5,24 @@ export type { GiftAnswers, GiftResult, GiftWarmupAnswers };
 
 let accessTokenPromise: Promise<string> | null = null;
 
-async function getAccessToken() {
+function clearGiftAuthCache() {
+  accessTokenPromise = null;
+}
+
+void supabase.auth.onAuthStateChange?.(() => {
+  clearGiftAuthCache();
+});
+
+async function getAccessToken(options: { forceRefresh?: boolean } = {}) {
+  if (options.forceRefresh) {
+    clearGiftAuthCache();
+  }
+
   if (accessTokenPromise) {
     return accessTokenPromise;
   }
 
-  accessTokenPromise = getFreshAccessToken().catch((error) => {
+  accessTokenPromise = getFreshAccessToken(options).catch((error) => {
     accessTokenPromise = null;
     throw error;
   });
@@ -18,7 +30,15 @@ async function getAccessToken() {
   return accessTokenPromise;
 }
 
-async function getFreshAccessToken() {
+async function getFreshAccessToken(options: { forceRefresh?: boolean } = {}) {
+  if (options.forceRefresh) {
+    const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+
+    if (!refreshError && refreshedData.session?.access_token) {
+      return refreshedData.session.access_token;
+    }
+  }
+
   const {
     data: { session },
     error,
@@ -39,22 +59,40 @@ export function preloadGiftAuth() {
   void getAccessToken().catch(() => undefined);
 }
 
-export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
-  const accessToken = await getAccessToken();
+async function authorizedFetch(path: string, body: unknown) {
+  const makeRequest = async (accessToken: string) =>
+    fetch(path, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    });
 
-  const response = await fetch('/api/find-gifts', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ answers }),
-  });
+  const accessToken = await getAccessToken();
+  const response = await makeRequest(accessToken);
+
+  if (response.status !== 401) {
+    return response;
+  }
+
+  clearGiftAuthCache();
+  const refreshedAccessToken = await getAccessToken({ forceRefresh: true });
+  return makeRequest(refreshedAccessToken);
+}
+
+export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
+  const response = await authorizedFetch('/api/find-gifts', { answers });
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);
     const message =
-      typeof errorBody?.error === 'string' ? errorBody.error : 'Could not find gifts';
+      response.status === 401
+        ? 'Your session expired. Please sign in again.'
+        : typeof errorBody?.error === 'string'
+          ? errorBody.error
+          : 'Could not find gifts';
     throw new Error(message);
   }
 
@@ -62,14 +100,5 @@ export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
 }
 
 export async function warmBudgetCatalog(answers: GiftWarmupAnswers): Promise<void> {
-  const accessToken = await getAccessToken();
-
-  await fetch('/api/find-gifts-warmup', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ answers }),
-  });
+  await authorizedFetch('/api/find-gifts-warmup', { answers });
 }
