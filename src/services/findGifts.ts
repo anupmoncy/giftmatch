@@ -43,6 +43,35 @@ const modelOutputSchema = z
   })
   .strict();
 
+const modelOutputJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['summary', 'recommendations'],
+  properties: {
+    summary: {
+      type: 'string',
+      minLength: 1,
+    },
+    recommendations: {
+      type: 'array',
+      maxItems: MAX_RECOMMENDATIONS,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['catalog_item_id', 'rank', 'score', 'reason', 'gift_angle', 'confidence'],
+        properties: {
+          catalog_item_id: { type: 'string' },
+          rank: { type: 'integer', minimum: 1, maximum: MAX_RECOMMENDATIONS },
+          score: { type: 'number', minimum: 0, maximum: 100 },
+          reason: { type: 'string', minLength: 1 },
+          gift_angle: { type: 'string', minLength: 1 },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        },
+      },
+    },
+  },
+};
+
 type CatalogItem = z.infer<typeof catalogItemSchema>;
 type ModelRecommendation = z.infer<typeof modelRecommendationSchema>;
 
@@ -70,6 +99,13 @@ type BudgetRange = {
   max?: number;
   persistedBudget: number | null;
 };
+
+class ModelOutputParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ModelOutputParseError';
+  }
+}
 
 function getEnv(name: string): string | undefined {
   return process.env[name] || undefined;
@@ -117,6 +153,75 @@ function isRateLimitError(error: unknown): boolean {
     candidate.error?.code === 'insufficient_quota' ||
     candidate.error?.type === 'insufficient_quota'
   );
+}
+
+function isModelOutputParseError(error: unknown): boolean {
+  return error instanceof ModelOutputParseError;
+}
+
+function extractJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+
+  if (start === -1) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = inString;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+
+      if (depth === 0) {
+        return text.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseModelOutputContent(rawContent: string): unknown {
+  try {
+    return JSON.parse(rawContent);
+  } catch {
+    const jsonObject = extractJsonObject(rawContent);
+
+    if (!jsonObject) {
+      throw new ModelOutputParseError('OpenAI returned a non-JSON recommendation response');
+    }
+
+    try {
+      return JSON.parse(jsonObject);
+    } catch {
+      throw new ModelOutputParseError('OpenAI returned malformed JSON recommendation response');
+    }
+  }
 }
 
 function parseBudgetRange(budget: string): BudgetRange {
@@ -220,6 +325,14 @@ async function rankCatalogWithModel(
   const response = await client.responses.create({
     model,
     input: prompt,
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'giftmatch_recommendations',
+        strict: true,
+        schema: modelOutputJsonSchema,
+      },
+    },
   });
 
   const rawContent = response.output_text;
@@ -228,7 +341,17 @@ async function rankCatalogWithModel(
     throw new Error('OpenAI returned an empty recommendation response');
   }
 
-  return modelOutputSchema.parse(JSON.parse(rawContent));
+  const parsedContent = parseModelOutputContent(rawContent);
+
+  try {
+    return modelOutputSchema.parse(parsedContent);
+  } catch (error) {
+    throw new ModelOutputParseError(
+      error instanceof Error
+        ? `OpenAI returned invalid recommendation response: ${error.message}`
+        : 'OpenAI returned invalid recommendation response',
+    );
+  }
 }
 
 function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
@@ -393,11 +516,13 @@ export async function findGifts(
   try {
     output = await rankCatalogWithModel(answers, catalog, model);
   } catch (error) {
-    if (!isRateLimitError(error)) {
+    const shouldUseFallback = isRateLimitError(error) || isModelOutputParseError(error);
+
+    if (!shouldUseFallback) {
       throw error;
     }
 
-    console.warn('OpenAI quota exhausted; using catalog fallback recommendations', error);
+    console.warn('OpenAI ranking unavailable; using catalog fallback recommendations', error);
     output = buildRateLimitFallbackOutput(answers, catalog);
     model = RATE_LIMIT_FALLBACK_MODEL;
   }
