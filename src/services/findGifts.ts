@@ -46,17 +46,22 @@ const modelOutputSchema = z
   .object({
     summary: z.string().min(1),
     recommendations: z.array(modelRecommendationSchema).max(MAX_RECOMMENDATIONS),
+    eliminated_catalog_item_ids: z.array(z.string()).default([]),
   })
   .strict();
 
 const modelOutputJsonSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['summary', 'recommendations'],
+  required: ['summary', 'recommendations', 'eliminated_catalog_item_ids'],
   properties: {
     summary: {
       type: 'string',
       minLength: 1,
+    },
+    eliminated_catalog_item_ids: {
+      type: 'array',
+      items: { type: 'string' },
     },
     recommendations: {
       type: 'array',
@@ -555,7 +560,10 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
 
   return JSON.stringify(
     {
-      task: 'Rank only the provided catalog items. Do not add items. Do not invent or reuse catalog IDs. Budget, recipient, and personality filtering already happened in code. Free text is the strongest signal: use it to eliminate irrelevant items and then rank the remaining items.',
+      context:
+        'GiftMatch helps a signed-in shopper choose a thoughtful gift from our real catalog. The app has already narrowed the catalog by budget, recipient, and personality. Your job is the final judgment step: use the shopper free-text note to decide which remaining catalog items are genuinely relevant, eliminate poor fits, and rank the best surviving gifts so the UI can show a concise top-5 shortlist.',
+      task:
+        'Review every provided catalog item in two passes. First eliminate items that are not clearly relevant to free_text. Then rank only the surviving items by personal fit. Do not add items. Do not invent or reuse catalog IDs. Free text is the strongest signal because it contains the shopper-specific intent that the quiz cannot capture.',
       allowed_catalog_item_ids: allowedCatalogItemIds,
       catalog: catalog.map((item) => ({
         catalog_item_id: item.id,
@@ -569,8 +577,10 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
       output_requirements: {
         summary: 'Exactly 2 warm sentences.',
         recommendations: hasFreeText
-          ? `Rank only items that clearly match free_text. Return fewer than ${MAX_RECOMMENDATIONS} items if fewer are relevant. Do not fill slots with broad quiz matches. For example, if free_text asks for art, painting, drawing, or crafts, do not rank skincare or beauty items above art/craft items. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates.`
-          : `Rank up to ${MAX_RECOMMENDATIONS} of the supplied catalog items. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates.`,
+          ? `Rank only items that clearly satisfy free_text. Return fewer than ${MAX_RECOMMENDATIONS} items if fewer are relevant; an honest short list is better than weak filler. Do not promote broad quiz matches when the free-text note points elsewhere. If an item only matches a superficial word but its actual category, subcategory, or use case is unrelated to free_text, put its ID in eliminated_catalog_item_ids. Each recommendation reason should connect the item to the shopper note, not just repeat generic product traits. For example, if free_text asks for art, painting, drawing, or crafts, eliminate skincare and beauty items. If free_text asks for travel, eliminate gaming hardware unless free_text explicitly asks for gaming while traveling. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates.`
+          : `Rank up to ${MAX_RECOMMENDATIONS} of the supplied catalog items by recipient and personality fit. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates. Recommendation reasons should explain the human gift fit, not just describe the product.`,
+        eliminated_catalog_item_ids:
+          'Include every supplied catalog_item_id that you rejected as irrelevant to free_text. Use an empty array when no item is eliminated.',
       },
       quiz_selection: {
         recipient: answers.recipient,
@@ -802,6 +812,10 @@ function getFreeTextKeywords(freeText: string) {
     skincare: ['skincare', 'skin', 'beauty', 'wellness', 'mask', 'balm'],
     coffee: ['coffee', 'brew', 'roast', 'mug'],
     tea: ['tea', 'steep', 'cozy'],
+    travel: ['travel', 'traveler', 'trip', 'luggage', 'flight', 'hotel', 'weekend'],
+    traveling: ['travel', 'traveler', 'trip', 'luggage', 'flight', 'hotel', 'weekend'],
+    travelling: ['travel', 'traveler', 'trip', 'luggage', 'flight', 'hotel', 'weekend'],
+    trip: ['travel', 'traveler', 'trip', 'luggage', 'flight', 'hotel', 'weekend'],
     hiking: ['hiking', 'hike', 'trail', 'outdoor', 'adventure'],
     books: ['book', 'books', 'reading', 'reader'],
     reading: ['book', 'books', 'reading', 'reader'],
@@ -941,6 +955,7 @@ function buildRateLimitFallbackOutput(
   return {
     summary:
       'The smart ranker is temporarily unavailable, so I matched gifts from the live catalog with a backup ranker. These picks are budget-aware and saved to admin history so the test flow stays reviewable.',
+    eliminated_catalog_item_ids: [],
     recommendations: rankedItems.map(({ item, score }, index) => {
       const rank = index + 1;
       const confidence = rank <= 2 ? 'high' : rank <= 4 ? 'medium' : 'low';
@@ -1004,6 +1019,9 @@ function repairModelOutputWithCatalog(
 
   return {
     summary: output.summary,
+    eliminated_catalog_item_ids: output.eliminated_catalog_item_ids.filter(
+      (id) => ids.has(id) && !seenIds.has(id),
+    ),
     recommendations: repairedRecommendations,
   };
 }
@@ -1012,6 +1030,13 @@ function validateRankedItems(output: z.infer<typeof modelOutputSchema>, catalog:
   const ids = new Set(catalog.map((item) => item.id));
   const seenIds = new Set<string>();
   const seenRanks = new Set<number>();
+  const eliminatedIds = new Set(output.eliminated_catalog_item_ids);
+
+  for (const eliminatedId of eliminatedIds) {
+    if (!ids.has(eliminatedId)) {
+      throw new Error(`Model eliminated unknown catalog_item_id: ${eliminatedId}`);
+    }
+  }
 
   for (const recommendation of output.recommendations) {
     if (!ids.has(recommendation.catalog_item_id)) {
@@ -1024,6 +1049,12 @@ function validateRankedItems(output: z.infer<typeof modelOutputSchema>, catalog:
 
     if (seenRanks.has(recommendation.rank)) {
       throw new Error(`Model returned duplicate rank: ${recommendation.rank}`);
+    }
+
+    if (eliminatedIds.has(recommendation.catalog_item_id)) {
+      throw new Error(
+        `Model both ranked and eliminated catalog_item_id: ${recommendation.catalog_item_id}`,
+      );
     }
 
     seenIds.add(recommendation.catalog_item_id);
@@ -1200,6 +1231,7 @@ export async function findGifts(
         output = {
           summary:
             'I could not find catalog items inside that budget yet. Try a wider budget and I can look again with more room to match their style.',
+          eliminated_catalog_item_ids: [],
           recommendations: [],
         };
       } else {

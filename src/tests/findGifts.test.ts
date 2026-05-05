@@ -50,6 +50,7 @@ const catalogItems = [
 
 const validModelOutput = {
   summary: 'These gifts balance practical use with a personal spark. The top pick feels especially tailored.',
+  eliminated_catalog_item_ids: [],
   recommendations: [
     {
       catalog_item_id: 'catalog-1',
@@ -357,9 +358,88 @@ describe('findGifts', () => {
 
     const prompt = mockState.responsesCreate.mock.calls[0][0].input as string;
     expect(prompt).toContain('Free text is the strongest signal');
-    expect(prompt).toContain('do not rank skincare or beauty items above art/craft items');
+    expect(prompt).toContain('eliminate skincare and beauty items');
     expect(prompt).toContain('art-0');
     expect(prompt).not.toContain('skincare-0');
+  });
+
+  it('has the LLM eliminate superficially matching gaming accessories for travel requests', async () => {
+    const travelCatalog = Array.from({ length: 6 }, (_, index) => ({
+      id: `travel-${index}`,
+      name: `Travel Organizer ${index}`,
+      description: 'A practical friend gift for travel, trips, luggage, flights, and weekend packing.',
+      price: 30 + index,
+      image_url: null,
+      brand: 'Pack Co',
+      category: 'Travel',
+      subcategory: 'Organization',
+    }));
+    const gamingCatalog = [
+      {
+        id: 'xbox-controller',
+        name: 'Travel Xbox Controller Kit',
+        description: 'A practical friend gift for travel-labeled gaming, Xbox consoles, PC games, and controller setups.',
+        price: 45,
+        image_url: null,
+        brand: 'Microsoft Xbox',
+        category: 'Gaming',
+        subcategory: 'Controller',
+      },
+      {
+        id: 'steelseries-pad',
+        name: 'SteelSeries Travel Mouse Pad Kit',
+        description: 'A practical friend gift for travel-labeled gaming, SteelSeries gear, mouse pad comfort, and PC setups.',
+        price: 35,
+        image_url: null,
+        brand: 'SteelSeries',
+        category: 'Gaming',
+        subcategory: 'PC Accessory',
+      },
+    ];
+    mockState.createClient.mockReturnValueOnce(
+      createSupabaseClient({
+        data: [...gamingCatalog, ...travelCatalog],
+        error: null,
+      }),
+    );
+    mockState.responsesCreate.mockResolvedValueOnce({
+      output_text: JSON.stringify({
+        summary: 'The travel context points to packing and trip helpers. Gaming accessories were excluded because no gaming need was stated.',
+        eliminated_catalog_item_ids: ['xbox-controller', 'steelseries-pad'],
+        recommendations: travelCatalog.slice(0, 5).map((item, index) => ({
+          catalog_item_id: item.id,
+          rank: index + 1,
+          score: 97 - index,
+          reason: 'It directly supports travel and packing.',
+          gift_angle: 'Travel helper',
+          confidence: 'high',
+        })),
+      }),
+    });
+    const findGifts = await importService();
+
+    await findGifts(
+      {
+        ...answers,
+        personality: 'practical',
+        freeText: 'for travel',
+      },
+      { userId: 'user-1' },
+    );
+
+    const prompt = mockState.responsesCreate.mock.calls[0][0].input as string;
+    expect(prompt).toContain('eliminated_catalog_item_ids');
+    expect(prompt).toContain('travel-0');
+    expect(prompt).toContain('xbox-controller');
+    expect(prompt).toContain('steelseries-pad');
+    expect(mockState.inserts[1]).toMatchObject({
+      table: 'recommendation_runs',
+      payload: expect.objectContaining({
+        ranked_output: expect.objectContaining({
+          eliminated_catalog_item_ids: ['xbox-controller', 'steelseries-pad'],
+        }),
+      }),
+    });
   });
 
   it('parses and validates structured model output fields', async () => {
