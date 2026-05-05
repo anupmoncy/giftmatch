@@ -33,12 +33,24 @@ const gift = {
 
 describe('GiftCard', () => {
   it('falls back when the catalog image fails to load', () => {
-    render(<GiftCard gift={gift} recommendationRunId="recommendation-run-1" />);
+    render(
+      <GiftCard
+        gift={{
+          ...gift,
+          item: {
+            ...gift.item,
+            category: 'Electronics',
+          },
+        }}
+        recommendationRunId="recommendation-run-1"
+      />,
+    );
 
     fireEvent.error(screen.getByRole('img', { name: /studio journal/i }));
 
     expect(screen.queryByRole('img', { name: /studio journal/i })).not.toBeInTheDocument();
     expect(screen.getByText(/no image/i)).toBeInTheDocument();
+    expect(screen.getByText('📱')).toBeInTheDocument();
   });
 
   it('falls back when the catalog image URL is blank', () => {
@@ -49,6 +61,7 @@ describe('GiftCard', () => {
           item: {
             ...gift.item,
             image_url: '   ',
+            category: 'Fashion & Accessories',
           },
         }}
         recommendationRunId="recommendation-run-1"
@@ -57,5 +70,6 @@ describe('GiftCard', () => {
 
     expect(screen.queryByRole('img', { name: /studio journal/i })).not.toBeInTheDocument();
     expect(screen.getByText(/no image/i)).toBeInTheDocument();
+    expect(screen.getByText('👜')).toBeInTheDocument();
   });
 });

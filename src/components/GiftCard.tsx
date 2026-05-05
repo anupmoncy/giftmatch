@@ -13,6 +13,33 @@ const confidenceStyles = {
   low: 'border border-gray-200 bg-gray-50 text-gray-400',
 } satisfies Record<GiftRecommendation['confidence'], string>;
 
+const categoryFallbacks = {
+  Electronics: {
+    emoji: '📱',
+    gradient: 'from-blue-50 to-indigo-100',
+  },
+  'Beauty & Wellness': {
+    emoji: '✨',
+    gradient: 'from-pink-50 to-rose-100',
+  },
+  'Home & Living': {
+    emoji: '🏠',
+    gradient: 'from-amber-50 to-orange-100',
+  },
+  'Fashion & Accessories': {
+    emoji: '👜',
+    gradient: 'from-purple-50 to-violet-100',
+  },
+  Gaming: {
+    emoji: '🎮',
+    gradient: 'from-green-50 to-emerald-100',
+  },
+  'Experience & Learning': {
+    emoji: '📚',
+    gradient: 'from-yellow-50 to-amber-100',
+  },
+} satisfies Record<string, { emoji: string; gradient: string }>;
+
 function formatPrice(price: number) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -29,6 +56,10 @@ export function GiftCard({ gift, recommendationRunId }: GiftCardProps) {
   const score = Math.max(0, Math.min(100, Math.round(gift.score)));
   const imageUrl = gift.item.image_url?.trim();
   const showImage = Boolean(imageUrl) && !imageFailed;
+  const fallback = categoryFallbacks[gift.item.category] ?? {
+    emoji: '🎁',
+    gradient: 'from-gray-50 to-gray-100',
+  };
 
   useEffect(() => {
     setImageFailed(false);
@@ -77,8 +108,13 @@ export function GiftCard({ gift, recommendationRunId }: GiftCardProps) {
           onError={() => setImageFailed(true)}
         />
       ) : (
-        <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-2xl">
-          <span aria-hidden="true">🎁</span>
+        <div
+          className={[
+            'flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-3xl',
+            fallback.gradient,
+          ].join(' ')}
+        >
+          <span aria-hidden="true">{fallback.emoji}</span>
           <span className="sr-only">No image</span>
         </div>
       )}
