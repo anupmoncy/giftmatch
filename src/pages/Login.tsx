@@ -54,7 +54,7 @@ export function LoginPage() {
         </h1>
         <p className="mt-3 text-gray-500">
           {isSignUp
-            ? 'Sign up to start matching and saving thoughtful gift ideas.'
+            ? 'Sign up to start matching thoughtful gift ideas. Demo sign-up bypasses email verification so reviewers can get in immediately.'
             : 'Sign in to start matching gifts.'}
         </p>
 
