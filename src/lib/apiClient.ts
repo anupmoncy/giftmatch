@@ -3,7 +3,22 @@ import type { GiftAnswers, GiftResult, GiftWarmupAnswers } from '../services/fin
 
 export type { GiftAnswers, GiftResult, GiftWarmupAnswers };
 
+let accessTokenPromise: Promise<string> | null = null;
+
 async function getAccessToken() {
+  if (accessTokenPromise) {
+    return accessTokenPromise;
+  }
+
+  accessTokenPromise = getFreshAccessToken().catch((error) => {
+    accessTokenPromise = null;
+    throw error;
+  });
+
+  return accessTokenPromise;
+}
+
+async function getFreshAccessToken() {
   const {
     data: { session },
     error,
@@ -18,6 +33,10 @@ async function getAccessToken() {
   }
 
   return session.access_token;
+}
+
+export function preloadGiftAuth() {
+  void getAccessToken().catch(() => undefined);
 }
 
 export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {

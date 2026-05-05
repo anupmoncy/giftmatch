@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GiftCard } from '../components/GiftCard.js';
-import { findGifts, warmBudgetCatalog, type GiftResult } from '../lib/apiClient.js';
+import {
+  findGifts,
+  preloadGiftAuth,
+  warmBudgetCatalog,
+  type GiftResult,
+} from '../lib/apiClient.js';
 import { checkAuth } from '../lib/auth.js';
 import { quizResetEventName } from '../lib/quizReset.js';
 
@@ -85,7 +90,7 @@ export function QuizPage() {
   const [freeText, setFreeText] = useState('');
   const [result, setResult] = useState<GiftResult | null>(null);
   const [error, setError] = useState('');
-  const warmedBudgetRef = useRef<string | null>(null);
+  const warmingBudgetsRef = useRef(new Set<string>());
   const canSubmit = Boolean(answers.recipient && answers.personality && answers.budget);
   const answeredQuestionCount =
     Number(Boolean(answers.recipient)) +
@@ -101,6 +106,9 @@ export function QuizPage() {
       .then((session) => {
         if (isMounted && !session) {
           navigate('/login', { replace: true });
+        } else if (isMounted) {
+          preloadGiftAuth();
+          warmBudget('flexible');
         }
       })
       .catch(() => {
@@ -114,20 +122,16 @@ export function QuizPage() {
     };
   }, [navigate]);
 
-  useEffect(() => {
-    if (!answers.budget || phase !== 'quiz' || warmedBudgetRef.current === answers.budget) {
+  function warmBudget(budget: string) {
+    if (!budget || warmingBudgetsRef.current.has(budget)) {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      warmedBudgetRef.current = answers.budget ?? null;
-      warmBudgetCatalog({ budget: answers.budget ?? '' }).catch(() => {
-        warmedBudgetRef.current = null;
-      });
-    }, 150);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [answers.budget, phase]);
+    warmingBudgetsRef.current.add(budget);
+    warmBudgetCatalog({ budget }).catch(() => {
+      warmingBudgetsRef.current.delete(budget);
+    });
+  }
 
   async function submitQuiz(nextFreeText: string) {
     const completeAnswers = buildCompleteAnswers(answers, nextFreeText);
@@ -153,6 +157,10 @@ export function QuizPage() {
   }
 
   function handleSelect(key: AnswerKey, value: string) {
+    if (key === 'budget') {
+      warmBudget(value);
+    }
+
     setAnswers((currentAnswers) => ({ ...currentAnswers, [key]: value }));
   }
 
@@ -162,7 +170,7 @@ export function QuizPage() {
     setFreeText('');
     setResult(null);
     setError('');
-    warmedBudgetRef.current = null;
+    warmingBudgetsRef.current.clear();
   }
 
   useEffect(() => {
@@ -318,6 +326,16 @@ export function QuizPage() {
                     <button
                       key={option.value}
                       type="button"
+                      onFocus={() => {
+                        if (question.key === 'budget') {
+                          warmBudget(option.value);
+                        }
+                      }}
+                      onPointerEnter={() => {
+                        if (question.key === 'budget') {
+                          warmBudget(option.value);
+                        }
+                      }}
                       onClick={() => handleSelect(question.key, option.value)}
                       className={[
                         'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-150',

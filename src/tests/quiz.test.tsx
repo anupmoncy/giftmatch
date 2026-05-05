@@ -16,6 +16,7 @@ vi.mock('../lib/auth.js', () => ({
 
 vi.mock('../lib/apiClient.js', () => ({
   findGifts: mockState.findGifts,
+  preloadGiftAuth: vi.fn(),
   warmBudgetCatalog: mockState.warmBudgetCatalog,
 }));
 
@@ -151,10 +152,22 @@ describe('QuizPage', () => {
         budget: '25-50',
       });
     });
+    expect(mockState.warmBudgetCatalog).toHaveBeenCalledWith({ budget: 'flexible' });
 
     fireEvent.click(screen.getByRole('button', { name: /friend/i }));
     fireEvent.click(screen.getByRole('button', { name: /creative/i }));
-    expect(mockState.warmBudgetCatalog).toHaveBeenCalledTimes(1);
+    expect(mockState.warmBudgetCatalog).toHaveBeenCalledTimes(2);
+  });
+
+  it('preloads exact budget before click when a budget option receives intent', async () => {
+    renderQuiz();
+    const budgetButton = await screen.findByRole('button', { name: /\$50-\$100/i });
+
+    fireEvent.pointerEnter(budgetButton);
+
+    await waitFor(() => {
+      expect(mockState.warmBudgetCatalog).toHaveBeenCalledWith({ budget: '50-100' });
+    });
   });
 
   it('renders a loading match note while findGifts is in flight', async () => {
