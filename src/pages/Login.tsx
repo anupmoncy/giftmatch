@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase.js';
 
 async function createConfirmedUser(username: string, password: string) {
@@ -58,9 +58,9 @@ export function LoginPage() {
   return (
     <section className="mx-auto mt-24 max-w-md px-4">
       <div className="mb-8 text-center">
-        <p className="text-2xl font-bold text-gray-900">
+        <Link to="/quiz" className="inline-block text-2xl font-bold text-gray-900">
           <span aria-hidden="true">🎁</span> GiftMatch
-        </p>
+        </Link>
         <p className="mt-2 text-sm text-gray-400">Gift recommendations powered by AI</p>
       </div>
 

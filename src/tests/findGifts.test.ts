@@ -35,7 +35,6 @@ const catalogItems = [
     brand: 'Paper Co',
     category: 'Stationery',
     subcategory: 'Journals',
-    age_tags: ['pre-teen', 'teen', 'young-adult'],
   },
   {
     id: 'catalog-2',
@@ -46,7 +45,6 @@ const catalogItems = [
     brand: 'North Goods',
     category: 'Outdoors',
     subcategory: 'Drinkware',
-    age_tags: ['teen', 'young-adult', 'middle-age'],
   },
 ];
 
@@ -74,7 +72,6 @@ const validModelOutput = {
 
 const answers = {
   recipient: 'friend',
-  age: 'young-adult',
   personality: 'creative',
   budget: '25-50',
   freeText: 'They love sketching on weekend hikes.',
@@ -151,8 +148,19 @@ beforeEach(() => {
   process.env.OPENAI_API_KEY = 'openai-key';
   delete process.env.OPENAI_MODEL;
 
-  mockState.responsesCreate.mockImplementation(async () => {
+  mockState.responsesCreate.mockImplementation(async (request) => {
     mockState.orderLog.push('openai');
+    if (request.text?.format?.name === 'giftmatch_guardrail_review') {
+      return {
+        output_text: JSON.stringify({
+          recommendations: validModelOutput.recommendations.map((recommendation) => ({
+            catalog_item_id: recommendation.catalog_item_id,
+            approved: true,
+            reason: 'Appropriate fit for the selected context.',
+          })),
+        }),
+      };
+    }
     return { output_text: JSON.stringify(validModelOutput) };
   });
 
@@ -194,7 +202,7 @@ describe('findGifts', () => {
 
     await findGifts(answers, { userId: 'user-1' });
 
-    expect(mockState.orderLog).toEqual(['catalog', 'openai']);
+    expect(mockState.orderLog).toEqual(['catalog', 'openai', 'openai']);
     expect(mockState.limit).toHaveBeenCalledWith(500);
   });
 
@@ -308,7 +316,6 @@ describe('findGifts', () => {
       payload: {
         user_id: 'user-1',
         recipient: answers.recipient,
-        age_bucket: answers.age,
         personality: answers.personality,
         budget: 50,
         free_text: answers.freeText,
@@ -349,6 +356,47 @@ describe('findGifts', () => {
     });
   });
 
+  it('filters recommendations rejected by the LLM guardrail review', async () => {
+    mockState.responsesCreate
+      .mockImplementationOnce(async () => {
+        mockState.orderLog.push('openai');
+        return { output_text: JSON.stringify(validModelOutput) };
+      })
+      .mockImplementationOnce(async () => {
+        mockState.orderLog.push('openai');
+        return {
+          output_text: JSON.stringify({
+            recommendations: [
+              {
+                catalog_item_id: 'catalog-1',
+                approved: true,
+                reason: 'Still matches the creative friend context.',
+              },
+              {
+                catalog_item_id: 'catalog-2',
+                approved: false,
+                reason: 'Less relevant to the sketching context.',
+              },
+            ],
+          }),
+        };
+      });
+    const findGifts = await importService();
+
+    const result = await findGifts(answers, { userId: 'user-1' });
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].catalog_item_id).toBe('catalog-1');
+    expect(mockState.inserts[1]).toMatchObject({
+      table: 'recommendation_runs',
+      payload: expect.objectContaining({
+        ranked_output: expect.objectContaining({
+          recommendations: [expect.objectContaining({ catalog_item_id: 'catalog-1' })],
+        }),
+      }),
+    });
+  });
+
   it('throws a descriptive error when OpenAI returns malformed JSON', async () => {
     mockState.responsesCreate.mockResolvedValueOnce({ output_text: '{not-json' });
     const findGifts = await importService();
@@ -361,7 +409,6 @@ describe('findGifts', () => {
       payload: {
         user_id: 'user-1',
         recipient: answers.recipient,
-        age_bucket: answers.age,
         personality: answers.personality,
         budget: 50,
         free_text: answers.freeText,

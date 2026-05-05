@@ -14,7 +14,6 @@ const MODEL_MAX_OUTPUT_TOKENS = 800;
 
 const answersSchema = z.object({
   recipient: z.string().trim().min(1),
-  age: z.string().trim().optional().default(''),
   personality: z.string().trim().min(1),
   budget: z.string().trim().min(1),
   freeText: z.string().trim().optional().default(''),
@@ -29,7 +28,6 @@ const catalogItemSchema = z.object({
   brand: z.string(),
   category: z.string(),
   subcategory: z.string(),
-  age_tags: z.array(z.string()).optional().default([]),
 });
 
 const modelRecommendationSchema = z
@@ -73,6 +71,42 @@ const modelOutputJsonSchema = {
           reason: { type: 'string', minLength: 1 },
           gift_angle: { type: 'string', minLength: 1 },
           confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        },
+      },
+    },
+  },
+};
+
+const guardrailRecommendationSchema = z
+  .object({
+    catalog_item_id: z.string(),
+    approved: z.boolean(),
+    reason: z.string().min(1),
+  })
+  .strict();
+
+const guardrailOutputSchema = z
+  .object({
+    recommendations: z.array(guardrailRecommendationSchema).max(MAX_RECOMMENDATIONS),
+  })
+  .strict();
+
+const guardrailOutputJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['recommendations'],
+  properties: {
+    recommendations: {
+      type: 'array',
+      maxItems: MAX_RECOMMENDATIONS,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['catalog_item_id', 'approved', 'reason'],
+        properties: {
+          catalog_item_id: { type: 'string' },
+          approved: { type: 'boolean' },
+          reason: { type: 'string', minLength: 1 },
         },
       },
     },
@@ -305,21 +339,6 @@ function isRateLimitError(error: unknown): boolean {
   );
 }
 
-function isMissingColumnError(error: unknown, columnName: string): boolean {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-
-  const candidate = error as {
-    code?: string | null;
-    message?: string | null;
-    details?: string | null;
-  };
-  const text = [candidate.message, candidate.details].filter(Boolean).join(' ').toLowerCase();
-
-  return candidate.code === '42703' || text.includes(columnName.toLowerCase());
-}
-
 function isModelOutputParseError(error: unknown): boolean {
   return error instanceof ModelOutputParseError;
 }
@@ -463,7 +482,6 @@ function normalizeCatalogImage(item: CatalogItem): CatalogItem {
 
   return {
     ...item,
-    age_tags: item.age_tags ?? [],
     image_url: buildCatalogImageDataUri(item),
   };
 }
@@ -479,33 +497,21 @@ async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogIt
     }
   }
 
-  const runCatalogQuery = (columns: string) => {
-    let query = getSupabaseAdmin()
-      .from('catalog')
-      .select(columns)
-      .order('price', { ascending: true })
-      .limit(CATALOG_FETCH_LIMIT);
+  let query = getSupabaseAdmin()
+    .from('catalog')
+    .select('id, name, description, price, image_url, brand, category, subcategory')
+    .order('price', { ascending: true })
+    .limit(CATALOG_FETCH_LIMIT);
 
-    if (typeof range.min === 'number') {
-      query = query.gte('price', range.min);
-    }
-
-    if (typeof range.max === 'number') {
-      query = query.lte('price', range.max);
-    }
-
-    return query;
-  };
-
-  let { data, error } = await runCatalogQuery(
-    'id, name, description, price, image_url, brand, category, subcategory, age_tags',
-  );
-
-  if (isMissingColumnError(error, 'age_tags')) {
-    ({ data, error } = await runCatalogQuery(
-      'id, name, description, price, image_url, brand, category, subcategory',
-    ));
+  if (typeof range.min === 'number') {
+    query = query.gte('price', range.min);
   }
+
+  if (typeof range.max === 'number') {
+    query = query.lte('price', range.max);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;
@@ -538,7 +544,6 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
         brand: item.brand,
         category: item.category,
         subcategory: item.subcategory,
-        age_tags: item.age_tags,
       })),
       output_requirements: {
         summary: 'Exactly 2 warm sentences.',
@@ -586,6 +591,111 @@ async function requestModelRanking(prompt: string, model: string): Promise<strin
   return rawContent;
 }
 
+function buildGuardrailPrompt(
+  answers: z.infer<typeof answersSchema>,
+  output: z.infer<typeof modelOutputSchema>,
+  catalog: CatalogItem[],
+): string {
+  const itemsById = new Map(catalog.map((item) => [item.id, item]));
+
+  return JSON.stringify({
+    task: 'Review ranked gift recommendations. Approve only items that are appropriate for the selected recipient, personality, budget, and free-text context. Reject items that are clearly unsafe, age-inappropriate from the text, irrelevant, offensive, medical/regulated, or a poor fit for explicit user constraints. Do not add items.',
+    answers,
+    recommendations: output.recommendations.map((recommendation) => {
+      const item = itemsById.get(recommendation.catalog_item_id);
+
+      return {
+        catalog_item_id: recommendation.catalog_item_id,
+        rank: recommendation.rank,
+        reason: recommendation.reason,
+        gift_angle: recommendation.gift_angle,
+        item: item
+          ? {
+              name: item.name,
+              description: item.description,
+              price: item.price,
+              brand: item.brand,
+              category: item.category,
+              subcategory: item.subcategory,
+            }
+          : null,
+      };
+    }),
+    output_requirements:
+      'Return one review object for every supplied catalog_item_id. approved=false excludes that item from final results.',
+  });
+}
+
+async function requestGuardrailReview(
+  answers: z.infer<typeof answersSchema>,
+  output: z.infer<typeof modelOutputSchema>,
+  catalog: CatalogItem[],
+  model: string,
+): Promise<z.infer<typeof guardrailOutputSchema>> {
+  const client = getOpenAIClient();
+  const response = await client.responses.create({
+    model,
+    input: [
+      'You are GiftMatch safety and relevance review. Your job is to filter the already-ranked recommendations against the user selection and free-text context before anything is shown.',
+      '',
+      buildGuardrailPrompt(answers, output, catalog),
+    ].join('\n'),
+    max_output_tokens: 600,
+    prompt_cache_key: `${PROMPT_VERSION}-guardrail`,
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'giftmatch_guardrail_review',
+        strict: true,
+        schema: guardrailOutputJsonSchema,
+      },
+    },
+  });
+
+  if (!response.output_text) {
+    throw new Error('OpenAI returned an empty guardrail review response');
+  }
+
+  const parsedContent = parseModelOutputContent(response.output_text);
+  return guardrailOutputSchema.parse(parsedContent);
+}
+
+async function applyGuardrailReviewBestEffort(
+  answers: z.infer<typeof answersSchema>,
+  output: z.infer<typeof modelOutputSchema>,
+  catalog: CatalogItem[],
+  model: string,
+): Promise<z.infer<typeof modelOutputSchema>> {
+  if (output.recommendations.length === 0 || model === RATE_LIMIT_FALLBACK_MODEL) {
+    return output;
+  }
+
+  try {
+    const review = await requestGuardrailReview(answers, output, catalog, model);
+    const approvedIds = new Set(
+      review.recommendations
+        .filter((recommendation) => recommendation.approved)
+        .map((recommendation) => recommendation.catalog_item_id),
+    );
+    const reviewedIds = new Set(
+      review.recommendations.map((recommendation) => recommendation.catalog_item_id),
+    );
+
+    const recommendations = output.recommendations
+      .filter(
+        (recommendation) =>
+          !reviewedIds.has(recommendation.catalog_item_id) ||
+          approvedIds.has(recommendation.catalog_item_id),
+      )
+      .map((recommendation, index) => ({ ...recommendation, rank: index + 1 }));
+
+    return { ...output, recommendations };
+  } catch (error) {
+    console.warn('OpenAI guardrail review unavailable; using validated recommendations', summarizeError(error));
+    return output;
+  }
+}
+
 function parseAndValidateModelOutput(rawContent: string): z.infer<typeof modelOutputSchema> {
   const parsedContent = parseModelOutputContent(rawContent);
 
@@ -602,7 +712,6 @@ function parseAndValidateModelOutput(rawContent: string): z.infer<typeof modelOu
 
 function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
   const personality = answers.personality.toLowerCase();
-  const age = answers.age.toLowerCase();
   const freeTextTokens = answers.freeText
     .toLowerCase()
     .split(/[^a-z0-9]+/)
@@ -619,7 +728,6 @@ function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
 
   return [
     answers.recipient.toLowerCase(),
-    age,
     personality,
     ...(personalityKeywords[personality] ?? []),
     ...freeTextTokens,
@@ -627,14 +735,12 @@ function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
 }
 
 function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) {
-  const requestedAge = keywords[1];
   const searchableText = [
     item.name,
     item.description,
     item.brand,
     item.category,
     item.subcategory,
-    ...item.age_tags,
   ]
     .join(' ')
     .toLowerCase();
@@ -642,10 +748,8 @@ function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) 
     (score, keyword) => score + (searchableText.includes(keyword) ? 5 : 0),
     0,
   );
-  const ageScore =
-    requestedAge && item.age_tags.some((ageTag) => ageTag.toLowerCase() === requestedAge) ? 12 : 0;
 
-  return 80 + matchScore + ageScore - index * 0.5;
+  return 80 + matchScore - index * 0.5;
 }
 
 function selectCatalogForRanking(answers: z.infer<typeof answersSchema>, catalog: CatalogItem[]) {
@@ -785,26 +889,16 @@ async function persistRunRecord(params: {
   const quizRunPayload = {
     user_id: userId,
     recipient: params.answers.recipient,
-    age_bucket: params.answers.age || null,
     personality: params.answers.personality,
     budget: params.budgetRange.persistedBudget,
     free_text: params.answers.freeText,
   };
 
-  let { data: quizRun, error: quizRunError } = await supabase
+  const { data: quizRun, error: quizRunError } = await supabase
     .from('quiz_runs')
     .insert(quizRunPayload)
     .select('id')
     .single();
-
-  if (isMissingColumnError(quizRunError, 'age_bucket')) {
-    const { age_bucket: _ageBucket, ...legacyQuizRunPayload } = quizRunPayload;
-    ({ data: quizRun, error: quizRunError } = await supabase
-      .from('quiz_runs')
-      .insert(legacyQuizRunPayload)
-      .select('id')
-      .single());
-  }
 
   if (quizRunError) {
     throw quizRunError;
@@ -1029,6 +1123,14 @@ export async function findGifts(
       validateRankedItems(output, catalog);
     } finally {
       addElapsed(stageTimings, 'parse_validate', parseValidateStartedAt);
+    }
+
+    const guardrailStartedAt = Date.now();
+    try {
+      output = await applyGuardrailReviewBestEffort(answers, output, catalog, model);
+      validateRankedItems(output, catalog);
+    } finally {
+      addElapsed(stageTimings, 'parse_validate', guardrailStartedAt);
     }
   } catch (error) {
     if (failedRunPersisted) {

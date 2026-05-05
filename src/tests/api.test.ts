@@ -25,7 +25,6 @@ type TestResponse = {
 
 const validAnswers = {
   recipient: 'friend',
-  age: 'young-adult',
   personality: 'creative',
   budget: '25-50',
   freeText: 'Likes hiking.',
@@ -54,7 +53,6 @@ const giftResult = {
         brand: 'Paper Co',
         category: 'Stationery',
         subcategory: 'Journals',
-        age_tags: ['pre-teen', 'teen', 'young-adult'],
       },
     },
   ],
