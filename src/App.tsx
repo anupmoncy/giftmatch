@@ -1,6 +1,7 @@
 import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
 import { NavBar } from './components/NavBar.js';
 import { AdminPage } from './pages/Admin.js';
+import { HistoryPage } from './pages/History.js';
 import { LoginPage } from './pages/Login.js';
 import { QuizPage } from './pages/Quiz.js';
 
@@ -16,6 +17,7 @@ function AppShell() {
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/quiz" element={<QuizPage />} />
+          <Route path="/history" element={<HistoryPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/quiz" replace />} />
         </Routes>
