@@ -305,6 +305,21 @@ function isRateLimitError(error: unknown): boolean {
   );
 }
 
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as {
+    code?: string | null;
+    message?: string | null;
+    details?: string | null;
+  };
+  const text = [candidate.message, candidate.details].filter(Boolean).join(' ').toLowerCase();
+
+  return candidate.code === '42703' || text.includes(columnName.toLowerCase());
+}
+
 function isModelOutputParseError(error: unknown): boolean {
   return error instanceof ModelOutputParseError;
 }
@@ -464,21 +479,33 @@ async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogIt
     }
   }
 
-  let query = getSupabaseAdmin()
-    .from('catalog')
-    .select('id, name, description, price, image_url, brand, category, subcategory, age_tags')
-    .order('price', { ascending: true })
-    .limit(CATALOG_FETCH_LIMIT);
+  const runCatalogQuery = (columns: string) => {
+    let query = getSupabaseAdmin()
+      .from('catalog')
+      .select(columns)
+      .order('price', { ascending: true })
+      .limit(CATALOG_FETCH_LIMIT);
 
-  if (typeof range.min === 'number') {
-    query = query.gte('price', range.min);
+    if (typeof range.min === 'number') {
+      query = query.gte('price', range.min);
+    }
+
+    if (typeof range.max === 'number') {
+      query = query.lte('price', range.max);
+    }
+
+    return query;
+  };
+
+  let { data, error } = await runCatalogQuery(
+    'id, name, description, price, image_url, brand, category, subcategory, age_tags',
+  );
+
+  if (isMissingColumnError(error, 'age_tags')) {
+    ({ data, error } = await runCatalogQuery(
+      'id, name, description, price, image_url, brand, category, subcategory',
+    ));
   }
-
-  if (typeof range.max === 'number') {
-    query = query.lte('price', range.max);
-  }
-
-  const { data, error } = await query;
 
   if (error) {
     throw error;
@@ -755,21 +782,36 @@ async function persistRunRecord(params: {
     return { quizRunId: null, recommendationRunId: null };
   }
 
-  const { data: quizRun, error: quizRunError } = await supabase
+  const quizRunPayload = {
+    user_id: userId,
+    recipient: params.answers.recipient,
+    age_bucket: params.answers.age || null,
+    personality: params.answers.personality,
+    budget: params.budgetRange.persistedBudget,
+    free_text: params.answers.freeText,
+  };
+
+  let { data: quizRun, error: quizRunError } = await supabase
     .from('quiz_runs')
-    .insert({
-        user_id: userId,
-        recipient: params.answers.recipient,
-        age_bucket: params.answers.age || null,
-        personality: params.answers.personality,
-      budget: params.budgetRange.persistedBudget,
-      free_text: params.answers.freeText,
-    })
+    .insert(quizRunPayload)
     .select('id')
     .single();
 
+  if (isMissingColumnError(quizRunError, 'age_bucket')) {
+    const { age_bucket: _ageBucket, ...legacyQuizRunPayload } = quizRunPayload;
+    ({ data: quizRun, error: quizRunError } = await supabase
+      .from('quiz_runs')
+      .insert(legacyQuizRunPayload)
+      .select('id')
+      .single());
+  }
+
   if (quizRunError) {
     throw quizRunError;
+  }
+
+  if (!quizRun) {
+    throw new Error('Could not persist quiz run.');
   }
 
   const { data: recommendationRun, error: recommendationRunError } = await supabase
