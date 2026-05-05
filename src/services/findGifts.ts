@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 const PROMPT_VERSION = 'giftmatch-rank-v1';
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const OPENAI_MODEL = 'codex-mini-latest';
 const MAX_RECOMMENDATIONS = 6;
 
 const answersSchema = z.object({
@@ -172,7 +172,6 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
 async function rankCatalogWithModel(
   answers: z.infer<typeof answersSchema>,
   catalog: CatalogItem[],
-  model: string,
 ): Promise<z.infer<typeof modelOutputSchema>> {
   if (catalog.length === 0) {
     return {
@@ -182,63 +181,18 @@ async function rankCatalogWithModel(
     };
   }
 
-  const openai = new OpenAI({ apiKey: getEnv('OPENAI_API_KEY') });
-  const completion = await openai.chat.completions.create({
-    model,
-    temperature: 0.4,
-    messages: [
-      {
-        role: 'system',
-        content:
-          'You are GiftMatch. Rank provided catalog items for personal fit and explain the human reason. The application code owns budget filtering and persistence; you only rank the items you receive.',
-      },
-      {
-        role: 'user',
-        content: buildRankingPrompt(answers, catalog),
-      },
-    ],
-    response_format: {
-      type: 'json_schema',
-      json_schema: {
-        name: 'giftmatch_recommendations',
-        strict: true,
-        schema: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['summary', 'recommendations'],
-          properties: {
-            summary: { type: 'string' },
-            recommendations: {
-              type: 'array',
-              maxItems: MAX_RECOMMENDATIONS,
-              items: {
-                type: 'object',
-                additionalProperties: false,
-                required: [
-                  'catalog_item_id',
-                  'rank',
-                  'score',
-                  'reason',
-                  'gift_angle',
-                  'confidence',
-                ],
-                properties: {
-                  catalog_item_id: { type: 'string' },
-                  rank: { type: 'integer', minimum: 1, maximum: MAX_RECOMMENDATIONS },
-                  score: { type: 'number', minimum: 0, maximum: 100 },
-                  reason: { type: 'string' },
-                  gift_angle: { type: 'string' },
-                  confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
+  const client = new OpenAI({ apiKey: getEnv('OPENAI_API_KEY') });
+  const prompt = [
+    'You are GiftMatch. Rank provided catalog items for personal fit and explain the human reason. The application code owns budget filtering and persistence; you only rank the items you receive.',
+    '',
+    buildRankingPrompt(answers, catalog),
+  ].join('\n');
+  const response = await client.responses.create({
+    model: OPENAI_MODEL,
+    input: prompt,
   });
 
-  const rawContent = completion.choices[0]?.message.content;
+  const rawContent = response.output_text;
 
   if (!rawContent) {
     throw new Error('OpenAI returned an empty recommendation response');
@@ -328,9 +282,9 @@ export async function findGifts(
 ): Promise<GiftResult> {
   const answers = answersSchema.parse(rawAnswers);
   const budgetRange = parseBudgetRange(answers.budget);
-  const model = getEnv('OPENAI_MODEL') ?? DEFAULT_MODEL;
+  const model = OPENAI_MODEL;
   const catalog = await fetchBudgetFilteredCatalog(budgetRange);
-  const output = await rankCatalogWithModel(answers, catalog, model);
+  const output = await rankCatalogWithModel(answers, catalog);
 
   validateRankedItems(output, catalog);
 
