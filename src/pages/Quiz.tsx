@@ -33,7 +33,12 @@ export type QuizAnswers = {
 };
 
 const maxFreeTextLength = 300;
-const loadingHighlights = ['Catalog', 'Free text'];
+const loadingHeadlines = [
+  'Finding your perfect match...',
+  'Searching thousands of gifts...',
+  'Ranking by personality...',
+  'Almost there...',
+];
 
 const questions: SelectQuestion[] = [
   {
@@ -91,6 +96,8 @@ export function QuizPage() {
   const [result, setResult] = useState<GiftResult | null>(null);
   const [error, setError] = useState('');
   const [loadingElapsedSeconds, setLoadingElapsedSeconds] = useState(0);
+  const [loadingHeadlineIndex, setLoadingHeadlineIndex] = useState(0);
+  const [loadingHeadlineVisible, setLoadingHeadlineVisible] = useState(true);
   const warmingBudgetsRef = useRef(new Set<string>());
   const canSubmit = Boolean(answers.recipient && answers.personality && answers.budget);
   const answeredQuestionCount =
@@ -150,6 +157,35 @@ export function QuizPage() {
     return () => window.clearInterval(intervalId);
   }, [phase]);
 
+  useEffect(() => {
+    if (phase !== 'loading') {
+      setLoadingHeadlineIndex(0);
+      setLoadingHeadlineVisible(true);
+      return;
+    }
+
+    setLoadingHeadlineIndex(0);
+    setLoadingHeadlineVisible(true);
+
+    let transitionTimeoutId: number | undefined;
+    const intervalId = window.setInterval(() => {
+      setLoadingHeadlineVisible(false);
+
+      transitionTimeoutId = window.setTimeout(() => {
+        setLoadingHeadlineIndex((currentIndex) => (currentIndex + 1) % loadingHeadlines.length);
+        setLoadingHeadlineVisible(true);
+      }, 400);
+    }, 2500);
+
+    return () => {
+      window.clearInterval(intervalId);
+
+      if (transitionTimeoutId) {
+        window.clearTimeout(transitionTimeoutId);
+      }
+    };
+  }, [phase]);
+
   async function submitQuiz(nextFreeText: string) {
     const completeAnswers = buildCompleteAnswers(answers, nextFreeText);
 
@@ -197,43 +233,31 @@ export function QuizPage() {
 
   if (phase === 'loading') {
     return (
-      <section className="min-h-[calc(100vh-3.5rem)] overflow-hidden bg-[#F8FAFC] px-4 pt-28 text-center">
-        <div className="giftmatch-loading-card relative mx-auto mb-7 w-full max-w-sm overflow-hidden rounded-2xl border border-white bg-white/90 p-5 text-left shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-          <div className="giftmatch-loading-sheen" aria-hidden="true" />
-          <div className="relative flex items-start justify-between gap-4">
-            <div>
-              <p className="giftmatch-loading-kicker text-xs font-semibold uppercase tracking-widest text-indigo-400">
-                Matching
-              </p>
-              <p className="mt-2 text-xl font-bold leading-tight text-gray-900">
-                Building a tighter shortlist.
-              </p>
-            </div>
-            <span className="giftmatch-loading-gift flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-xl shadow-[inset_0_0_0_1px_rgba(99,102,241,0.08)]">
-              🎁
-            </span>
-          </div>
-          <div className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" aria-hidden="true" />
-            <span aria-live="polite">Elapsed {loadingElapsedSeconds}s</span>
-          </div>
-          <div className="relative mt-5 flex flex-wrap gap-2">
-            {loadingHighlights.map((highlight, index) => (
-              <span
-                key={highlight}
-                className="giftmatch-loading-chip rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500"
-                style={{ animationDelay: `${120 + index * 90}ms` }}
-              >
-                {highlight}
-              </span>
-            ))}
-          </div>
+      <section className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#FDFCFB] to-[#F0EDFF] px-6 text-center">
+        <div
+          className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-3xl shadow-[0_8px_32px_rgba(99,102,241,0.3)]"
+          style={{ animation: 'float 2s ease-in-out infinite' }}
+        >
+          🎁
         </div>
-        <h1 className="giftmatch-loading-title text-2xl font-bold text-gray-900">
-          Finding gifts<span className="giftmatch-loading-dots" aria-hidden="true" />
+
+        <h1
+          className={[
+            'mb-2 text-2xl font-bold text-gray-900 transition-opacity duration-[400ms]',
+            loadingHeadlineVisible ? 'opacity-100' : 'opacity-0',
+          ].join(' ')}
+        >
+          {loadingHeadlines[loadingHeadlineIndex]}
         </h1>
-        <p className="giftmatch-loading-copy mt-2 text-sm text-gray-400">
-          Ranking the best fits.
+
+        <p className="mt-1 text-sm text-gray-400">Ideal wait is around 10 seconds</p>
+
+        <p className="mt-8 text-xs tracking-widest text-gray-300" aria-live="polite">
+          {loadingElapsedSeconds}s
+        </p>
+
+        <p className="mt-6 text-[11px] tracking-wide text-gray-300">
+          Powered by OpenAI · Thousands of gifts considered
         </p>
       </section>
     );
