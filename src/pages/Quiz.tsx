@@ -259,7 +259,7 @@ export function QuizPage() {
       </div>
 
       <div className="mx-auto max-w-2xl pt-28">
-        <div className="pb-4 text-center">
+        <div className="pb-4 text-left">
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-100 bg-white px-3 py-1 text-xs font-semibold text-indigo-500 shadow-sm">
             <span aria-hidden="true">✨</span>
             <span>Powered by AI</span>
