@@ -90,6 +90,7 @@ export function QuizPage() {
   const [freeText, setFreeText] = useState('');
   const [result, setResult] = useState<GiftResult | null>(null);
   const [error, setError] = useState('');
+  const [loadingElapsedSeconds, setLoadingElapsedSeconds] = useState(0);
   const warmingBudgetsRef = useRef(new Set<string>());
   const canSubmit = Boolean(answers.recipient && answers.personality && answers.budget);
   const answeredQuestionCount =
@@ -132,6 +133,22 @@ export function QuizPage() {
       warmingBudgetsRef.current.delete(budget);
     });
   }
+
+  useEffect(() => {
+    if (phase !== 'loading') {
+      setLoadingElapsedSeconds(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    setLoadingElapsedSeconds(0);
+
+    const intervalId = window.setInterval(() => {
+      setLoadingElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 250);
+
+    return () => window.clearInterval(intervalId);
+  }, [phase]);
 
   async function submitQuiz(nextFreeText: string) {
     const completeAnswers = buildCompleteAnswers(answers, nextFreeText);
@@ -195,6 +212,10 @@ export function QuizPage() {
             <span className="giftmatch-loading-gift flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-xl shadow-[inset_0_0_0_1px_rgba(99,102,241,0.08)]">
               🎁
             </span>
+          </div>
+          <div className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" aria-hidden="true" />
+            <span aria-live="polite">Elapsed {loadingElapsedSeconds}s</span>
           </div>
           <div className="relative mt-5 flex flex-wrap gap-2">
             {loadingHighlights.map((highlight, index) => (

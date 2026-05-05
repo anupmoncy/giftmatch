@@ -184,6 +184,7 @@ describe('QuizPage', () => {
 
     expect(await screen.findByText(/building your shortlist/i)).toBeInTheDocument();
     expect(screen.getByText(/match note/i)).toBeInTheDocument();
+    expect(screen.getByText(/elapsed 0s/i)).toBeInTheDocument();
     expect(screen.getByText(/free-text refined/i)).toBeInTheDocument();
     resolveRequest(result);
   });
