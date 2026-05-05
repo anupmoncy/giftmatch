@@ -73,6 +73,7 @@ function answerFirstThreeQuestions() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal('scrollTo', vi.fn());
   mockState.checkAuth.mockResolvedValue({
     access_token: 'access-token',
     user: { id: 'user-1' },
@@ -197,6 +198,16 @@ describe('QuizPage', () => {
 
     expect(await screen.findByText('Studio Journal')).toBeInTheDocument();
     expect(screen.getByText(result.summary)).toBeInTheDocument();
+  });
+
+  it('scrolls to the top when results render', async () => {
+    renderQuiz();
+    answerFirstThreeQuestions();
+
+    fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
+
+    expect(await screen.findByText('Studio Journal')).toBeInTheDocument();
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
 
   it('renders no-item alternatives prominently when no exact matches are returned', async () => {

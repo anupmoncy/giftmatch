@@ -231,6 +231,14 @@ export function QuizPage() {
     return () => window.removeEventListener(quizResetEventName, startOver);
   }, []);
 
+  useEffect(() => {
+    if (phase !== 'results' || !result) {
+      return;
+    }
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [phase, result]);
+
   if (phase === 'loading') {
     return (
       <section className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#FDFCFB] to-[#F0EDFF] px-6 text-center">
