@@ -548,10 +548,11 @@ async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogIt
 
 function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: CatalogItem[]): string {
   const allowedCatalogItemIds = catalog.map((item) => item.id);
+  const hasFreeText = answers.freeText.trim().length > 0;
 
   return JSON.stringify(
     {
-      task: 'Rank only the provided catalog items. Do not add items. Do not invent or reuse catalog IDs. Budget, recipient, and personality filtering already happened in code. Use free_text to rank, select, or eliminate final candidates.',
+      task: 'Rank only the provided catalog items. Do not add items. Do not invent or reuse catalog IDs. Budget, recipient, and personality filtering already happened in code. Free text is the strongest signal: use it to eliminate irrelevant items and then rank the remaining items.',
       allowed_catalog_item_ids: allowedCatalogItemIds,
       catalog: catalog.map((item) => ({
         catalog_item_id: item.id,
@@ -564,7 +565,9 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
       })),
       output_requirements: {
         summary: 'Exactly 2 warm sentences.',
-        recommendations: `Rank up to ${MAX_RECOMMENDATIONS} of the supplied catalog items. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates. Exclude items that conflict with free_text.`,
+        recommendations: hasFreeText
+          ? `Rank only items that clearly match free_text. Return fewer than ${MAX_RECOMMENDATIONS} items if fewer are relevant. Do not fill slots with broad quiz matches. For example, if free_text asks for art, painting, drawing, or crafts, do not rank skincare or beauty items above art/craft items. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates.`
+          : `Rank up to ${MAX_RECOMMENDATIONS} of the supplied catalog items. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates.`,
       },
       quiz_selection: {
         recipient: answers.recipient,
@@ -738,10 +741,7 @@ function parseAndValidateModelOutput(rawContent: string): z.infer<typeof modelOu
 
 function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
   const personality = answers.personality.toLowerCase();
-  const freeTextTokens = answers.freeText
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((token) => token.length >= 4);
+  const freeTextTokens = getFreeTextKeywords(answers.freeText);
 
   const personalityKeywords: Record<string, string[]> = {
     creative: ['art', 'creative', 'design', 'craft', 'journal', 'write', 'studio'],
@@ -758,6 +758,53 @@ function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
     ...(personalityKeywords[personality] ?? []),
     ...freeTextTokens,
   ];
+}
+
+const freeTextStopwords = new Set([
+  'and',
+  'are',
+  'but',
+  'for',
+  'gift',
+  'gifts',
+  'has',
+  'her',
+  'him',
+  'his',
+  'into',
+  'likes',
+  'love',
+  'loves',
+  'not',
+  'she',
+  'the',
+  'they',
+  'this',
+  'want',
+  'wants',
+  'with',
+]);
+
+function getFreeTextKeywords(freeText: string) {
+  const tokens = freeText
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3 && !freeTextStopwords.has(token));
+  const expansions: Record<string, string[]> = {
+    art: ['art', 'artist', 'artistic', 'paint', 'painting', 'watercolor', 'craft'],
+    artist: ['art', 'artist', 'artistic', 'paint', 'painting', 'watercolor', 'craft'],
+    drawing: ['draw', 'drawing', 'sketch', 'pencil', 'art'],
+    paint: ['paint', 'painting', 'watercolor', 'art', 'craft'],
+    painting: ['paint', 'painting', 'watercolor', 'art', 'craft'],
+    skincare: ['skincare', 'skin', 'beauty', 'wellness', 'mask', 'balm'],
+    coffee: ['coffee', 'brew', 'roast', 'mug'],
+    tea: ['tea', 'steep', 'cozy'],
+    hiking: ['hiking', 'hike', 'trail', 'outdoor', 'adventure'],
+    books: ['book', 'books', 'reading', 'reader'],
+    reading: ['book', 'books', 'reading', 'reader'],
+  };
+
+  return Array.from(new Set(tokens.flatMap((token) => expansions[token] ?? [token])));
 }
 
 function normalizeSearchValue(value: string) {
@@ -826,7 +873,12 @@ function filterCatalogByQuizSelection(
   };
 }
 
-function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) {
+function scoreCatalogItem(
+  item: CatalogItem,
+  keywords: string[],
+  index: number,
+  freeTextKeywords: string[] = [],
+) {
   const searchableText = [
     item.name,
     item.description,
@@ -840,18 +892,29 @@ function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) 
     (score, keyword) => score + (searchableText.includes(keyword) ? 5 : 0),
     0,
   );
+  const freeTextMatchScore = freeTextKeywords.reduce(
+    (score, keyword) => score + (searchableText.includes(keyword) ? 30 : 0),
+    0,
+  );
 
-  return 80 + matchScore - index * 0.5;
+  return 80 + matchScore + freeTextMatchScore - index * 0.5;
 }
 
 function selectCatalogForRanking(answers: z.infer<typeof answersSchema>, catalog: CatalogItem[]) {
   const selectedByQuiz = filterCatalogByQuizSelection(answers, catalog).catalog;
   const keywords = getFallbackKeywords(answers);
+  const freeTextKeywords = getFreeTextKeywords(answers.freeText);
+  const selectedByFreeText =
+    freeTextKeywords.length > 0
+      ? selectedByQuiz.filter((item) => itemMatchesAnyKeyword(item, freeTextKeywords))
+      : [];
+  const selectedCatalog =
+    selectedByFreeText.length >= QUIZ_FILTER_MIN_CATALOG_ITEMS ? selectedByFreeText : selectedByQuiz;
 
-  return selectedByQuiz
+  return selectedCatalog
     .map((item, index) => ({
       item,
-      score: scoreCatalogItem(item, keywords, index),
+      score: scoreCatalogItem(item, keywords, index, freeTextKeywords),
     }))
     .sort((left, right) => right.score - left.score || left.item.price - right.item.price)
     .slice(0, MODEL_CATALOG_LIMIT)
@@ -863,10 +926,11 @@ function buildRateLimitFallbackOutput(
   catalog: CatalogItem[],
 ): z.infer<typeof modelOutputSchema> {
   const keywords = getFallbackKeywords(answers);
+  const freeTextKeywords = getFreeTextKeywords(answers.freeText);
   const rankedItems = catalog
     .map((item, index) => ({
       item,
-      score: scoreCatalogItem(item, keywords, index),
+      score: scoreCatalogItem(item, keywords, index, freeTextKeywords),
     }))
     .sort((left, right) => right.score - left.score || left.item.price - right.item.price)
     .slice(0, MAX_RECOMMENDATIONS);

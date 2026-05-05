@@ -299,10 +299,67 @@ describe('findGifts', () => {
     await findGifts(answers, { userId: 'user-1' });
 
     const prompt = mockState.responsesCreate.mock.calls[0][0].input as string;
-    expect(prompt).toContain('Use free_text to rank, select, or eliminate final candidates');
+    expect(prompt).toContain('Free text is the strongest signal');
     expect(prompt).toContain(answers.freeText);
     expect(prompt).toContain('matching-0');
     expect(prompt).not.toContain('unrelated-0');
+  });
+
+  it('uses free text to eliminate irrelevant quiz-compatible candidates before ranking', async () => {
+    const artCatalog = Array.from({ length: 6 }, (_, index) => ({
+      id: `art-${index}`,
+      name: `Art Kit ${index}`,
+      description: 'A creative friend gift for art, painting, sketching, and craft nights.',
+      price: 30 + index,
+      image_url: null,
+      brand: 'Art Co',
+      category: 'Art',
+      subcategory: 'Painting',
+    }));
+    const skincareCatalog = Array.from({ length: 6 }, (_, index) => ({
+      id: `skincare-${index}`,
+      name: `Skincare Set ${index}`,
+      description: 'A creative friend gift with skincare, beauty, mask, balm, and pampering cues.',
+      price: 30 + index,
+      image_url: null,
+      brand: 'Glow Co',
+      category: 'Beauty',
+      subcategory: 'Skincare',
+    }));
+    mockState.createClient.mockReturnValueOnce(
+      createSupabaseClient({
+        data: [...skincareCatalog, ...artCatalog],
+        error: null,
+      }),
+    );
+    mockState.responsesCreate.mockResolvedValueOnce({
+      output_text: JSON.stringify({
+        summary: 'The free-text art cue pushed the creative supplies to the front. Beauty items were left out because they do not fit the requested hobby.',
+        recommendations: artCatalog.slice(0, 5).map((item, index) => ({
+          catalog_item_id: item.id,
+          rank: index + 1,
+          score: 98 - index,
+          reason: 'It directly supports the requested art interest.',
+          gift_angle: 'Art hobby pick',
+          confidence: 'high',
+        })),
+      }),
+    });
+    const findGifts = await importService();
+
+    await findGifts(
+      {
+        ...answers,
+        freeText: 'she asked for art',
+      },
+      { userId: 'user-1' },
+    );
+
+    const prompt = mockState.responsesCreate.mock.calls[0][0].input as string;
+    expect(prompt).toContain('Free text is the strongest signal');
+    expect(prompt).toContain('do not rank skincare or beauty items above art/craft items');
+    expect(prompt).toContain('art-0');
+    expect(prompt).not.toContain('skincare-0');
   });
 
   it('parses and validates structured model output fields', async () => {
