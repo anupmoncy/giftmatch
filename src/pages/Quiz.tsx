@@ -259,7 +259,7 @@ export function QuizPage() {
       </div>
 
       <div className="mx-auto max-w-xl px-5 pb-20 pt-20">
-        <div className="mb-10">
+        <div className="mb-8 border-b border-gray-200/70 pb-8">
           <p className="mb-3 text-xs font-bold uppercase tracking-[0.25em] text-amber-500">
             Gift Discovery
           </p>

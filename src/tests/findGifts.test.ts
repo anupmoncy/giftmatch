@@ -263,6 +263,38 @@ describe('findGifts', () => {
     }
   });
 
+  it('keeps valid catalog image URLs and fills missing images in the backend', async () => {
+    const findGifts = await importService();
+
+    const result = await findGifts(answers, { userId: 'user-1' });
+    const studioJournal = result.recommendations.find((gift) => gift.catalog_item_id === 'catalog-1');
+    const trailMug = result.recommendations.find((gift) => gift.catalog_item_id === 'catalog-2');
+
+    expect(studioJournal?.item.image_url).toBe('https://example.com/journal.jpg');
+    expect(trailMug?.item.image_url).toMatch(/^data:image\/svg\+xml/);
+  });
+
+  it('replaces unreliable source.unsplash catalog image URLs in the backend', async () => {
+    mockState.createClient.mockReturnValueOnce(
+      createSupabaseClient({
+        data: [
+          {
+            ...catalogItems[0],
+            image_url: 'https://source.unsplash.com/400x400/?home-&-living,storage',
+          },
+          catalogItems[1],
+        ],
+        error: null,
+      }),
+    );
+    const findGifts = await importService();
+
+    const result = await findGifts(answers, { userId: 'user-1' });
+    const studioJournal = result.recommendations.find((gift) => gift.catalog_item_id === 'catalog-1');
+
+    expect(studioJournal?.item.image_url).toMatch(/^data:image\/svg\+xml/);
+  });
+
   it('inserts quiz_runs and recommendation_runs with the expected fields', async () => {
     const findGifts = await importService();
 
@@ -369,7 +401,7 @@ describe('findGifts', () => {
     });
   });
 
-  it('falls back to catalog ranking when OpenAI returns an unknown catalog item id', async () => {
+  it('repairs model output when OpenAI returns an unknown catalog item id', async () => {
     mockState.responsesCreate.mockResolvedValueOnce({
       output_text: JSON.stringify({
         ...validModelOutput,
@@ -385,7 +417,7 @@ describe('findGifts', () => {
 
     const result = await findGifts(answers, { userId: 'user-1' });
 
-    expect(result.model).toBe('catalog-rate-limit-fallback-v1');
+    expect(result.model).toBe('gpt-4o-mini');
     expect(result.recommendations.length).toBeGreaterThan(0);
     expect(
       result.recommendations.every((item) =>
@@ -395,7 +427,7 @@ describe('findGifts', () => {
     expect(mockState.inserts[1]).toMatchObject({
       table: 'recommendation_runs',
       payload: expect.objectContaining({
-        model: 'catalog-rate-limit-fallback-v1',
+        model: 'gpt-4o-mini',
         ranked_output: expect.objectContaining({ recommendations: expect.any(Array) }),
       }),
     });

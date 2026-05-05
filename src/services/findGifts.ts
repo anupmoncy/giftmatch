@@ -124,6 +124,14 @@ type CatalogCacheEntry = {
 let supabaseAdminClient: SupabaseClient<any, any, any> | null = null;
 let openAIClient: OpenAI | null = null;
 const catalogCache = new Map<string, CatalogCacheEntry>();
+const categoryImageStyles: Record<string, { from: string; to: string; accent: string }> = {
+  'Beauty & Wellness': { from: '#FFF1F2', to: '#FEF3C7', accent: '#F59E0B' },
+  Electronics: { from: '#EFF6FF', to: '#F5F3FF', accent: '#4F46E5' },
+  'Experience & Learning': { from: '#ECFDF5', to: '#FFFBEB', accent: '#059669' },
+  'Fashion & Accessories': { from: '#FDF2F8', to: '#FAE8FF', accent: '#DB2777' },
+  Gaming: { from: '#F5F3FF', to: '#ECFEFF', accent: '#7C3AED' },
+  'Home & Living': { from: '#FFFBEB', to: '#F7FEE7', accent: '#D97706' },
+};
 
 class ModelOutputParseError extends Error {
   constructor(message: string) {
@@ -395,6 +403,53 @@ function parseBudgetRange(budget: string): BudgetRange {
   return { persistedBudget: null };
 }
 
+function escapeXml(value: string) {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function isUnreliableCatalogImageUrl(imageUrl: string | null) {
+  const trimmedUrl = imageUrl?.trim();
+
+  if (!trimmedUrl) {
+    return true;
+  }
+
+  try {
+    const url = new URL(trimmedUrl);
+    return url.hostname === 'source.unsplash.com';
+  } catch {
+    return true;
+  }
+}
+
+function buildCatalogImageDataUri(item: CatalogItem) {
+  const style = categoryImageStyles[item.category] ?? {
+    from: '#F9FAFB',
+    to: '#FFF7ED',
+    accent: '#F59E0B',
+  };
+  const title = escapeXml(item.name.slice(0, 44));
+  const category = escapeXml(item.subcategory || item.category);
+  const brand = escapeXml(item.brand.slice(0, 28));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${style.from}"/><stop offset="1" stop-color="${style.to}"/></linearGradient></defs><rect width="400" height="400" rx="42" fill="url(#bg)"/><circle cx="316" cy="74" r="48" fill="${style.accent}" opacity=".14"/><circle cx="70" cy="328" r="76" fill="#fff" opacity=".58"/><rect x="54" y="62" width="292" height="276" rx="32" fill="#fff" opacity=".82"/><path d="M118 176h164v112H118z" fill="${style.accent}" opacity=".16"/><path d="M140 176c0-33 27-60 60-60s60 27 60 60" fill="none" stroke="${style.accent}" stroke-width="16" stroke-linecap="round"/><path d="M200 176v112M118 220h164" stroke="${style.accent}" stroke-width="10" opacity=".28"/><text x="200" y="47" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" text-anchor="middle">${brand}</text><text x="200" y="330" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="800" text-anchor="middle">${title}</text><text x="200" y="358" fill="#6B7280" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle">${category}</text></svg>`;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function normalizeCatalogImage(item: CatalogItem): CatalogItem {
+  if (!isUnreliableCatalogImageUrl(item.image_url)) {
+    return {
+      ...item,
+      image_url: item.image_url?.trim() ?? null,
+    };
+  }
+
+  return {
+    ...item,
+    image_url: buildCatalogImageDataUri(item),
+  };
+}
+
 async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogItem[]> {
   const cacheKey = JSON.stringify({ min: range.min ?? null, max: range.max ?? null });
 
@@ -426,7 +481,7 @@ async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogIt
     throw error;
   }
 
-  const catalog = z.array(catalogItemSchema).parse(data ?? []);
+  const catalog = z.array(catalogItemSchema).parse(data ?? []).map(normalizeCatalogImage);
 
   if (process.env.NODE_ENV !== 'test') {
     catalogCache.set(cacheKey, {
@@ -439,9 +494,12 @@ async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogIt
 }
 
 function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: CatalogItem[]): string {
+  const allowedCatalogItemIds = catalog.map((item) => item.id);
+
   return JSON.stringify(
     {
-      task: 'Rank only the provided catalog items for gift fit. Do not add items. Do not filter by budget; the list is already budget-filtered in code.',
+      task: 'Rank only the provided catalog items for gift fit. Do not add items. Do not invent or reuse catalog IDs. Do not filter by budget; the list is already budget-filtered in code.',
+      allowed_catalog_item_ids: allowedCatalogItemIds,
       catalog: catalog.map((item) => ({
         catalog_item_id: item.id,
         name: item.name,
@@ -595,6 +653,57 @@ function buildRateLimitFallbackOutput(
         confidence,
       };
     }),
+  };
+}
+
+function repairModelOutputWithCatalog(
+  output: z.infer<typeof modelOutputSchema>,
+  answers: z.infer<typeof answersSchema>,
+  catalog: CatalogItem[],
+): z.infer<typeof modelOutputSchema> {
+  const ids = new Set(catalog.map((item) => item.id));
+  const seenIds = new Set<string>();
+  const repairedRecommendations: ModelRecommendation[] = [];
+
+  const rankedRecommendations = output.recommendations
+    .slice()
+    .sort((left, right) => left.rank - right.rank);
+
+  for (const recommendation of rankedRecommendations) {
+    if (!ids.has(recommendation.catalog_item_id) || seenIds.has(recommendation.catalog_item_id)) {
+      continue;
+    }
+
+    seenIds.add(recommendation.catalog_item_id);
+    repairedRecommendations.push({
+      ...recommendation,
+      rank: repairedRecommendations.length + 1,
+    });
+  }
+
+  if (repairedRecommendations.length < Math.min(MAX_RECOMMENDATIONS, catalog.length)) {
+    const fallbackOutput = buildRateLimitFallbackOutput(answers, catalog);
+
+    for (const recommendation of fallbackOutput.recommendations) {
+      if (seenIds.has(recommendation.catalog_item_id)) {
+        continue;
+      }
+
+      seenIds.add(recommendation.catalog_item_id);
+      repairedRecommendations.push({
+        ...recommendation,
+        rank: repairedRecommendations.length + 1,
+      });
+
+      if (repairedRecommendations.length >= MAX_RECOMMENDATIONS) {
+        break;
+      }
+    }
+  }
+
+  return {
+    summary: output.summary,
+    recommendations: repairedRecommendations,
   };
 }
 
@@ -860,11 +969,10 @@ export async function findGifts(
       }
 
       console.warn(
-        'OpenAI returned recommendations outside the fetched catalog; using catalog fallback recommendations',
+        'OpenAI returned recommendations outside the fetched catalog; repairing recommendations with catalog items',
         summarizeError(error),
       );
-      output = buildRateLimitFallbackOutput(answers, catalog);
-      model = RATE_LIMIT_FALLBACK_MODEL;
+      output = repairModelOutputWithCatalog(output, answers, catalog);
       validateRankedItems(output, catalog);
     } finally {
       addElapsed(stageTimings, 'parse_validate', parseValidateStartedAt);
