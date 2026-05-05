@@ -290,19 +290,26 @@ export function QuizPage() {
           <p className="text-sm italic leading-relaxed text-gray-700">{result.summary}</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3">
-          {result.recommendations
-            .slice()
-            .sort((left, right) => left.rank - right.rank)
-            .slice(0, 5)
-            .map((gift) => (
-              <GiftCard
-                key={`${result.recommendationRunId ?? 'run'}-${gift.catalog_item_id}`}
-                gift={gift}
-                recommendationRunId={result.recommendationRunId}
-              />
-            ))}
-        </div>
+        {result.recommendations.length > 0 ? (
+          <>
+            <p className="mb-3 text-sm font-medium text-gray-500">
+              Here are some close matches we found from the catalog.
+            </p>
+            <div className="grid grid-cols-1 gap-3">
+              {result.recommendations
+                .slice()
+                .sort((left, right) => left.rank - right.rank)
+                .slice(0, 5)
+                .map((gift) => (
+                  <GiftCard
+                    key={`${result.recommendationRunId ?? 'run'}-${gift.catalog_item_id}`}
+                    gift={gift}
+                    recommendationRunId={result.recommendationRunId}
+                  />
+                ))}
+            </div>
+          </>
+        ) : null}
 
         {result.recommendations.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-500 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
