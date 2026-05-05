@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatDateTime } from '../lib/formatters.js';
 import { supabase } from '../lib/supabase.js';
+import { asArray } from '../lib/supabaseJoins.js';
 
 type RecommendationRun = {
   id: string;
@@ -27,21 +29,6 @@ type RankedRecommendation = {
   gift_angle: string;
   itemName: string | null;
 };
-
-function asArray<T>(value: T | T[] | null): T[] {
-  if (!value) {
-    return [];
-  }
-
-  return Array.isArray(value) ? value : [value];
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
 
 function formatBudget(value: number | null) {
   return value === null ? 'Flexible' : `Up to $${value}`;
@@ -195,7 +182,7 @@ export function HistoryPage() {
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-xs font-medium text-gray-400">
-                      {formatDate(quizRun.created_at)}
+                      {formatDateTime(quizRun.created_at)}
                     </p>
                     <h2 className="mt-1 text-lg font-semibold text-gray-900">
                       Gift search for {titleCase(quizRun.recipient)}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { buildSubcategoryArtworkDataUri } from '../lib/categoryArtwork.js';
+import { formatPrice } from '../lib/formatters.js';
 import { supabase } from '../lib/supabase.js';
 import type { GiftRecommendation } from '../services/findGifts.js';
 
@@ -13,14 +14,6 @@ const confidenceStyles = {
   medium: 'border border-amber-100 bg-amber-50 text-amber-600',
   low: 'border border-gray-200 bg-gray-50 text-gray-400',
 } satisfies Record<GiftRecommendation['confidence'], string>;
-
-function formatPrice(price: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: price % 1 === 0 ? 0 : 2,
-  }).format(price);
-}
 
 export function GiftCard({ gift, recommendationRunId }: GiftCardProps) {
   const [isSaving, setIsSaving] = useState(false);

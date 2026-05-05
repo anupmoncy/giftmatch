@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { buildSubcategoryArtworkDataUri } from '../lib/categoryArtwork.js';
+import { formatDate, formatPrice } from '../lib/formatters.js';
 import { supabase } from '../lib/supabase.js';
 
 type CatalogItem = {
@@ -29,20 +30,6 @@ function asCatalogItem(value: SavedGiftRow['catalog']) {
   }
 
   return Array.isArray(value) ? (value[0] ?? null) : value;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-  }).format(new Date(value));
-}
-
-function formatPrice(price: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: price % 1 === 0 ? 0 : 2,
-  }).format(price);
 }
 
 export function SavedCatalogPage() {

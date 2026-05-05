@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatDateTime } from '../lib/formatters.js';
 import { supabase } from '../lib/supabase.js';
+import { asArray, asOne } from '../lib/supabaseJoins.js';
 
 type ProfileJoin = {
   email: string | null;
@@ -29,31 +31,12 @@ type AdminRunsResponse = {
   error?: string;
 };
 
-function asArray<T>(value: T | T[] | null): T[] {
-  if (!value) {
-    return [];
-  }
-
-  return Array.isArray(value) ? value : [value];
-}
-
-function asOne<T>(value: T | T[] | null): T | null {
-  return Array.isArray(value) ? (value[0] ?? null) : value;
-}
-
 function truncate(value: string | null | undefined, maxLength: number) {
   if (!value) {
     return '—';
   }
 
   return value.length > maxLength ? `${value.slice(0, maxLength).trim()}...` : value;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
 }
 
 export function AdminPage() {
@@ -164,7 +147,9 @@ export function AdminPage() {
                         index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50',
                       ].join(' ')}
                     >
-                      <td className="px-4 py-4 text-gray-600">{formatDate(quizRun.created_at)}</td>
+                      <td className="px-4 py-4 text-gray-600">
+                        {formatDateTime(quizRun.created_at)}
+                      </td>
                       <td className="px-4 py-4 text-gray-700">{profile?.email ?? '—'}</td>
                       <td className="px-4 py-4 capitalize text-gray-700">
                         {quizRun.recipient ?? '—'}
