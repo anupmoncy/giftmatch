@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { checkAdmin } from '../lib/auth.js';
+import { requestQuizReset } from '../lib/quizReset.js';
 import { supabase } from '../lib/supabase.js';
 
 export function NavBar() {
@@ -37,7 +38,7 @@ export function NavBar() {
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/90 backdrop-blur-sm">
       <nav className="flex h-14 items-center justify-between px-6">
-        <Link to="/quiz" className="text-lg font-bold text-gray-900">
+        <Link to="/quiz" onClick={requestQuizReset} className="text-lg font-bold text-gray-900">
           <span aria-hidden="true">🎁</span> GiftMatch
         </Link>
         <div className="flex items-center gap-4">

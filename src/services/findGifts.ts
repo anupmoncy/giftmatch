@@ -301,6 +301,10 @@ function getOpenAIModel() {
   return getEnv('OPENAI_MODEL') ?? DEFAULT_OPENAI_MODEL;
 }
 
+function shouldRunOpenAIGuardrailReview() {
+  return getEnv('ENABLE_OPENAI_GUARDRAIL_REVIEW') === 'true';
+}
+
 function getOpenAIClient() {
   if (process.env.NODE_ENV !== 'test' && openAIClient) {
     return openAIClient;
@@ -666,7 +670,11 @@ async function applyGuardrailReviewBestEffort(
   catalog: CatalogItem[],
   model: string,
 ): Promise<z.infer<typeof modelOutputSchema>> {
-  if (output.recommendations.length === 0 || model === RATE_LIMIT_FALLBACK_MODEL) {
+  if (
+    output.recommendations.length === 0 ||
+    model === RATE_LIMIT_FALLBACK_MODEL ||
+    !shouldRunOpenAIGuardrailReview()
+  ) {
     return output;
   }
 

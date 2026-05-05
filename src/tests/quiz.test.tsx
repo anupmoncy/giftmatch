@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuizPage } from '../pages/Quiz.js';
+import { requestQuizReset } from '../lib/quizReset.js';
 
 const mockState = vi.hoisted(() => ({
   checkAuth: vi.fn(),
@@ -131,7 +132,7 @@ describe('QuizPage', () => {
     });
   });
 
-  it('renders a loading spinner while findGifts is in flight', async () => {
+  it('renders a loading status brief while findGifts is in flight', async () => {
     let resolveRequest!: (value: typeof result) => void;
     mockState.findGifts.mockReturnValueOnce(
       new Promise((resolve) => {
@@ -143,7 +144,8 @@ describe('QuizPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
 
-    expect(await screen.findByText(/finding your perfect matches/i)).toBeInTheDocument();
+    expect(await screen.findByText(/building your shortlist/i)).toBeInTheDocument();
+    expect(screen.getByText(/live match brief/i)).toBeInTheDocument();
     resolveRequest(result);
   });
 
@@ -172,6 +174,21 @@ describe('QuizPage', () => {
     answerFirstThreeQuestions();
     fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
     fireEvent.click(await screen.findByRole('button', { name: /start over/i }));
+
+    expect(await screen.findByRole('heading', { name: /who is this for/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /find perfect gifts/i })).toBeDisabled();
+  });
+
+  it('resets the quiz when the logo requests a fresh match', async () => {
+    renderQuiz();
+    answerFirstThreeQuestions();
+    fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
+
+    expect(await screen.findByText('Studio Journal')).toBeInTheDocument();
+
+    act(() => {
+      requestQuizReset();
+    });
 
     expect(await screen.findByRole('heading', { name: /who is this for/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /find perfect gifts/i })).toBeDisabled();

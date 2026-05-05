@@ -147,6 +147,7 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
   process.env.OPENAI_API_KEY = 'openai-key';
   delete process.env.OPENAI_MODEL;
+  delete process.env.ENABLE_OPENAI_GUARDRAIL_REVIEW;
 
   mockState.responsesCreate.mockImplementation(async (request) => {
     mockState.orderLog.push('openai');
@@ -202,7 +203,7 @@ describe('findGifts', () => {
 
     await findGifts(answers, { userId: 'user-1' });
 
-    expect(mockState.orderLog).toEqual(['catalog', 'openai', 'openai']);
+    expect(mockState.orderLog).toEqual(['catalog', 'openai']);
     expect(mockState.limit).toHaveBeenCalledWith(500);
   });
 
@@ -357,6 +358,7 @@ describe('findGifts', () => {
   });
 
   it('filters recommendations rejected by the LLM guardrail review', async () => {
+    process.env.ENABLE_OPENAI_GUARDRAIL_REVIEW = 'true';
     mockState.responsesCreate
       .mockImplementationOnce(async () => {
         mockState.orderLog.push('openai');

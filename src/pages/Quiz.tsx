@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { GiftCard } from '../components/GiftCard.js';
 import { findGifts, type GiftResult } from '../lib/apiClient.js';
 import { checkAuth } from '../lib/auth.js';
+import { quizResetEventName } from '../lib/quizReset.js';
 
 type Phase = 'quiz' | 'loading' | 'results';
 type AnswerKey = 'recipient' | 'personality' | 'budget';
@@ -28,10 +29,10 @@ export type QuizAnswers = {
 
 const maxFreeTextLength = 300;
 const loadingMessages = [
-  'Scanning 30+ curated gifts...',
-  'Matching to personality type...',
-  'Ranking by relevance...',
-  'Almost there...',
+  'Reading the wish list signals',
+  'Shortlisting catalog standouts',
+  'Checking price fit',
+  'Writing the top picks',
 ];
 
 const questions: SelectQuestion[] = [
@@ -166,24 +167,59 @@ export function QuizPage() {
     setError('');
   }
 
+  useEffect(() => {
+    window.addEventListener(quizResetEventName, startOver);
+    return () => window.removeEventListener(quizResetEventName, startOver);
+  }, []);
+
   if (phase === 'loading') {
+    const activeLoadingMessage = loadingMessages[loadingMessageIndex];
+
     return (
-      <section className="min-h-[calc(100vh-3.5rem)] bg-[linear-gradient(135deg,#F8F7FF_0%,#F0F9FF_100%)] px-4 pt-32 text-center">
-        <div className="relative mx-auto mb-8 h-24 w-24">
-          <div className="absolute inset-[-8px] rounded-full border-2 border-indigo-200 opacity-75 animate-ping" />
-          <div className="absolute inset-[-16px] rounded-full border border-indigo-100 opacity-40 animate-ping [animation-delay:300ms]" />
-          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-3xl">
-            🎁
-          </span>
+      <section className="min-h-[calc(100vh-3.5rem)] bg-[#F8FAFC] px-4 pt-28 text-center">
+        <div className="mx-auto mb-7 w-full max-w-sm rounded-2xl border border-white bg-white/85 p-4 text-left shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+          <div className="mb-4 flex items-center justify-between">
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
+              Live match brief
+            </span>
+            <span className="text-xs font-medium text-gray-400">Usually under 10s</span>
+          </div>
+          <div className="space-y-2">
+            {loadingMessages.map((message, index) => {
+              const isActive = message === activeLoadingMessage;
+              const isDone = index < loadingMessageIndex;
+
+              return (
+                <div
+                  key={message}
+                  className={[
+                    'flex items-center gap-3 rounded-xl px-3 py-2 transition-colors duration-200',
+                    isActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-400',
+                  ].join(' ')}
+                >
+                  <span
+                    className={[
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                      isActive
+                        ? 'bg-indigo-500 text-white'
+                        : isDone
+                          ? 'bg-emerald-100 text-emerald-600'
+                          : 'bg-gray-100 text-gray-400',
+                    ].join(' ')}
+                  >
+                    {isDone ? '✓' : index + 1}
+                  </span>
+                  <span className="text-sm font-semibold">{message}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
         <h1 className="text-2xl font-bold text-gray-900">
-          Finding your perfect matches...
+          Building your shortlist...
         </h1>
         <p className="mt-2 text-sm text-gray-400">
-          Analysing your preferences against our catalog
-        </p>
-        <p className="mt-3 text-xs font-medium text-indigo-400 transition-opacity duration-500">
-          {loadingMessages[loadingMessageIndex]}
+          Comparing your answers with the catalog and returning only the best fits.
         </p>
       </section>
     );
