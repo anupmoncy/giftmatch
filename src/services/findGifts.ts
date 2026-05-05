@@ -88,6 +88,7 @@ export type GiftResult = {
   model: string;
   summary: string;
   recommendations: GiftRecommendation[];
+  fallback_mode?: boolean;
 };
 
 export type FindGiftsOptions = {

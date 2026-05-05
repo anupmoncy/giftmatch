@@ -26,15 +26,15 @@ export function NavBar() {
   }, []);
 
   return (
-    <header className="border-b border-gray-200 bg-white">
+    <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/90 backdrop-blur-sm">
       <nav className="flex h-14 items-center justify-between px-6">
         <Link to="/quiz" className="text-lg font-bold text-gray-900">
-          GiftMatch
+          <span aria-hidden="true">🎁</span> GiftMatch
         </Link>
         <div className="flex items-center gap-4">
           {isAdmin ? (
-            <Link to="/admin" className="text-sm font-medium text-gray-500 transition hover:text-gray-900">
-            Admin
+            <Link to="/admin" className="text-sm text-gray-400 transition hover:text-gray-900">
+              Admin
             </Link>
           ) : null}
         </div>

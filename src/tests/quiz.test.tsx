@@ -77,45 +77,33 @@ beforeEach(() => {
 });
 
 describe('QuizPage', () => {
-  it('renders the first question on load', async () => {
+  it('renders all quiz questions on load', async () => {
     renderQuiz();
 
     expect(await screen.findByRole('heading', { name: /who is this for/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /personality/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /budget/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/anything else/i)).toBeInTheDocument();
   });
 
-  it('selecting Q1 answer auto-advances to Q2', async () => {
+  it('submit is disabled until Q1-Q3 are answered', async () => {
     renderQuiz();
 
-    fireEvent.click(screen.getByRole('button', { name: /friend/i }));
-
-    expect(await screen.findByRole('heading', { name: /personality/i })).toBeInTheDocument();
-  });
-
-  it('selecting Q2 answer auto-advances to Q3', async () => {
-    renderQuiz();
-
-    fireEvent.click(screen.getByRole('button', { name: /friend/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /creative/i }));
-
-    expect(await screen.findByRole('heading', { name: /budget/i })).toBeInTheDocument();
-  });
-
-  it('selecting Q3 answer auto-advances to Q4', async () => {
-    renderQuiz();
+    const submitButton = await screen.findByRole('button', { name: /find perfect gifts/i });
+    expect(submitButton).toBeDisabled();
 
     answerFirstThreeQuestions();
-
-    expect(await screen.findByLabelText(/anything else/i)).toBeInTheDocument();
+    expect(submitButton).not.toBeDisabled();
   });
 
-  it('Q4 Continue triggers findGifts with all answers', async () => {
+  it('submitting triggers findGifts with all answers', async () => {
     renderQuiz();
     answerFirstThreeQuestions();
     fireEvent.change(await screen.findByLabelText(/anything else/i), {
       target: { value: 'They love weekend hikes.' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    fireEvent.click(screen.getByRole('button', { name: /find perfect gifts/i }));
 
     await waitFor(() => {
       expect(mockState.findGifts).toHaveBeenCalledWith({
@@ -127,11 +115,11 @@ describe('QuizPage', () => {
     });
   });
 
-  it('Q4 Skip triggers findGifts with empty freeText', async () => {
+  it('submitting with blank Q4 triggers findGifts with empty freeText', async () => {
     renderQuiz();
     answerFirstThreeQuestions();
 
-    fireEvent.click(await screen.findByRole('button', { name: /skip/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
 
     await waitFor(() => {
       expect(mockState.findGifts).toHaveBeenCalledWith({
@@ -153,9 +141,9 @@ describe('QuizPage', () => {
     renderQuiz();
     answerFirstThreeQuestions();
 
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
 
-    expect(await screen.findByText(/finding your perfect gifts/i)).toBeInTheDocument();
+    expect(await screen.findByText(/finding your perfect matches/i)).toBeInTheDocument();
     resolveRequest(result);
   });
 
@@ -163,7 +151,7 @@ describe('QuizPage', () => {
     renderQuiz();
     answerFirstThreeQuestions();
 
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
 
     expect(await screen.findByText('Studio Journal')).toBeInTheDocument();
     expect(screen.getByText(result.summary)).toBeInTheDocument();
@@ -174,7 +162,7 @@ describe('QuizPage', () => {
     renderQuiz();
     answerFirstThreeQuestions();
 
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
 
     expect(await screen.findByText('Could not rank gifts.')).toBeInTheDocument();
   });
@@ -182,9 +170,10 @@ describe('QuizPage', () => {
   it('Start over resets to Q1', async () => {
     renderQuiz();
     answerFirstThreeQuestions();
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
     fireEvent.click(await screen.findByRole('button', { name: /start over/i }));
 
     expect(await screen.findByRole('heading', { name: /who is this for/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /find perfect gifts/i })).toBeDisabled();
   });
 });

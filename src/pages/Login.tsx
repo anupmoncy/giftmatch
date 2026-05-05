@@ -36,8 +36,14 @@ export function LoginPage() {
 
   return (
     <section className="mx-auto mt-24 max-w-md px-4">
-      <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">GiftMatch</p>
+      <div className="mb-8 text-center">
+        <p className="text-2xl font-bold text-gray-900">
+          <span aria-hidden="true">🎁</span> GiftMatch
+        </p>
+        <p className="mt-2 text-sm text-gray-400">Gift recommendations powered by AI</p>
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
         <h1 className="mt-2 text-3xl font-semibold text-gray-900">
           {isSignUp ? 'Create your account' : 'Login'}
         </h1>
@@ -47,13 +53,13 @@ export function LoginPage() {
             : 'Sign in to start matching gifts.'}
         </p>
 
-        <div className="mt-6 grid grid-cols-2 rounded-xl bg-gray-100 p-1">
+        <div className="mt-6 grid grid-cols-2 rounded-xl bg-indigo-50 p-1">
           <button
             type="button"
             onClick={() => setIsSignUp(false)}
             className={[
               'rounded-lg px-3 py-2 text-sm font-semibold transition',
-              !isSignUp ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500',
+              !isSignUp ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500',
             ].join(' ')}
           >
             Sign in
@@ -63,7 +69,7 @@ export function LoginPage() {
             onClick={() => setIsSignUp(true)}
             className={[
               'rounded-lg px-3 py-2 text-sm font-semibold transition',
-              isSignUp ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500',
+              isSignUp ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500',
             ].join(' ')}
           >
             Sign up
@@ -82,7 +88,7 @@ export function LoginPage() {
               onChange={(event) => setEmail(event.target.value)}
               required
               autoComplete="email"
-              className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
+              className="mt-2 w-full rounded-xl border-2 border-gray-100 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-indigo-400"
             />
           </div>
           <div>
@@ -97,7 +103,7 @@ export function LoginPage() {
               required
               minLength={6}
               autoComplete={isSignUp ? 'new-password' : 'current-password'}
-              className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
+              className="mt-2 w-full rounded-xl border-2 border-gray-100 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-indigo-400"
             />
           </div>
 
@@ -110,7 +116,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex w-full items-center justify-center rounded-lg bg-black px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+            className="inline-flex h-14 w-full items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 px-5 text-base font-semibold text-white shadow-lg shadow-indigo-200 transition-all duration-200 hover:-translate-y-0.5 hover:from-indigo-600 hover:to-purple-600 hover:shadow-xl hover:shadow-indigo-300 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
           >
             {isSubmitting ? 'Please wait...' : isSignUp ? 'Sign up' : 'Sign in'}
           </button>

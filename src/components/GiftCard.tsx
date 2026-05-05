@@ -8,9 +8,9 @@ type GiftCardProps = {
 };
 
 const confidenceStyles = {
-  high: 'bg-green-100 text-green-700',
-  medium: 'bg-yellow-100 text-yellow-700',
-  low: 'bg-gray-100 text-gray-600',
+  high: 'border border-emerald-100 bg-emerald-50 text-emerald-600',
+  medium: 'border border-amber-100 bg-amber-50 text-amber-600',
+  low: 'border border-gray-200 bg-gray-50 text-gray-400',
 } satisfies Record<GiftRecommendation['confidence'], string>;
 
 function formatPrice(price: number) {
@@ -67,65 +67,77 @@ export function GiftCard({ gift, recommendationRunId }: GiftCardProps) {
   }
 
   return (
-    <article className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <article className="flex flex-row items-start gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-200 hover:border-indigo-100 hover:shadow-md">
       {showImage ? (
         <img
           src={imageUrl}
           alt={gift.item.name}
-          className="block aspect-square w-full rounded-lg bg-gray-100 object-cover"
+          className="h-16 w-16 flex-shrink-0 rounded-xl bg-gray-50 object-cover"
           loading="lazy"
           onError={() => setImageFailed(true)}
         />
       ) : (
-        <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-gray-100 text-sm text-gray-400">
-          No image
+        <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-2xl">
+          <span aria-hidden="true">🎁</span>
+          <span className="sr-only">No image</span>
         </div>
       )}
 
-      <div className="mt-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="font-semibold leading-6 text-gray-900">{gift.item.name}</h2>
-            <p className="mt-1 text-sm text-gray-500">{formatPrice(gift.item.price)}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold leading-tight text-gray-900">{gift.item.name}</h2>
+            {gift.rank === 1 ? (
+              <span className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-600">
+                <span aria-hidden="true">🏆</span>
+                Best match
+              </span>
+            ) : null}
           </div>
-          <span
-            className={[
-              'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize',
-              confidenceStyles[gift.confidence],
-            ].join(' ')}
-          >
-            {gift.confidence}
-          </span>
+          <p className="flex-shrink-0 text-sm font-bold text-indigo-600">
+            {formatPrice(gift.item.price)}
+          </p>
         </div>
 
-        <p className="mt-1 text-sm italic leading-6 text-gray-600">{gift.reason}</p>
+        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-gray-500">{gift.reason}</p>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-            {gift.gift_angle}
-          </span>
-          <span className="text-xs text-gray-400">Rank #{gift.rank}</span>
-        </div>
-
-        <div className="mt-4">
-          <div className="h-1 overflow-hidden rounded-full bg-gray-100">
-            <div className="h-full rounded-full bg-gray-900" style={{ width: `${score}%` }} />
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="truncate rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">
+              {gift.gift_angle}
+            </span>
+            <span
+              className={[
+                'rounded-full px-2 py-0.5 text-[10px] font-medium capitalize',
+                confidenceStyles[gift.confidence],
+              ].join(' ')}
+            >
+              {gift.confidence}
+            </span>
           </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-3">
           <button
             type="button"
             onClick={saveGift}
             disabled={isSaving || saved}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:border-gray-900 hover:text-gray-900 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+            className={[
+              'flex-shrink-0 rounded-lg border px-3 py-1.5 text-[10px] font-semibold transition disabled:cursor-not-allowed',
+              saved
+                ? 'border-indigo-500 bg-indigo-500 text-white'
+                : 'border-gray-200 text-gray-500 hover:border-indigo-400 hover:text-indigo-600',
+            ].join(' ')}
           >
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? 'Saving...' : saved ? '✓ Saved' : 'Save'}
           </button>
-          {saved ? <span className="text-sm font-medium text-green-700">✓ Saved</span> : null}
         </div>
 
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+        <div className="mt-2 h-0.5 w-full overflow-hidden rounded-full bg-gray-100">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-purple-400"
+            style={{ width: `${score}%` }}
+          />
+        </div>
+
+        {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
       </div>
     </article>
   );

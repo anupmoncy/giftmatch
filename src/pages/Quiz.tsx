@@ -79,11 +79,11 @@ function buildCompleteAnswers(answers: Partial<QuizAnswers>, freeText: string): 
 export function QuizPage() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>('quiz');
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Partial<QuizAnswers>>({});
   const [freeText, setFreeText] = useState('');
   const [result, setResult] = useState<GiftResult | null>(null);
   const [error, setError] = useState('');
+  const canSubmit = Boolean(answers.recipient && answers.personality && answers.budget);
 
   useEffect(() => {
     let isMounted = true;
@@ -130,165 +130,198 @@ export function QuizPage() {
 
   function handleSelect(key: AnswerKey, value: string) {
     setAnswers((currentAnswers) => ({ ...currentAnswers, [key]: value }));
-    setCurrentQuestionIndex((currentIndex) =>
-      currentIndex < questions.length ? currentIndex + 1 : currentIndex,
-    );
   }
 
   function startOver() {
     setPhase('quiz');
-    setCurrentQuestionIndex(0);
     setAnswers({});
     setFreeText('');
     setResult(null);
     setError('');
   }
 
-  return (
-    <section className="mx-auto max-w-5xl px-4 pt-12">
-      <div className="mx-auto max-w-lg">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-          Answer 4 quick questions
+  if (phase === 'loading') {
+    return (
+      <section className="px-4 pt-32 text-center">
+        <div className="relative mx-auto mb-6 h-20 w-20 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 animate-pulse">
+          <span
+            className="absolute inset-0 flex items-center justify-center text-3xl"
+            aria-hidden="true"
+          >
+            🎁
+          </span>
+        </div>
+        <h1 className="mt-4 text-xl font-semibold text-gray-900">
+          Finding your perfect matches...
+        </h1>
+        <p className="mt-2 animate-pulse text-sm text-gray-400">
+          Analysing your preferences against our catalog
         </p>
+      </section>
+    );
+  }
 
-        {error ? (
-          <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+  if (phase === 'results' && result) {
+    const maybeFallbackResult = result as GiftResult & {
+      fallback_mode?: boolean;
+      fallbackMode?: boolean;
+    };
+    const isFallback =
+      maybeFallbackResult.fallback_mode ||
+      maybeFallbackResult.fallbackMode ||
+      result.model.includes('fallback');
+
+    return (
+      <section className="mx-auto max-w-2xl px-4 pb-16 pt-24">
+        {isFallback ? (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs text-amber-600">
+            <span aria-hidden="true">⚡</span>
+            <span>Showing catalog preview — live AI recommendations coming soon</span>
           </div>
         ) : null}
 
-        <div className="mt-6 space-y-10">
-          {questions.map((question, index) =>
-            index === currentQuestionIndex ? (
-              <div key={question.key}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  Question {index + 1} of 4
-                </p>
-                <h1 className="mb-6 mt-2 text-xl font-semibold text-gray-900">
-                  {question.heading}
-                </h1>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {question.options.map((option) => {
-                    const isSelected = answers[question.key] === option.value;
-
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => handleSelect(question.key, option.value)}
-                        className={[
-                          'cursor-pointer rounded-xl border border-gray-200 p-4 text-center transition hover:border-gray-400',
-                          isSelected
-                            ? 'border-gray-900 bg-gray-50 font-semibold'
-                            : 'bg-white text-gray-700',
-                        ].join(' ')}
-                      >
-                        <span className="block text-3xl" aria-hidden="true">
-                          {option.emoji}
-                        </span>
-                        <span className="mt-3 block text-sm">{option.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null,
-          )}
-
-          {currentQuestionIndex === questions.length ? (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Question 4 of 4
-              </p>
-              <label
-                htmlFor="free-text-answer"
-                className="mb-6 mt-2 block text-xl font-semibold text-gray-900"
-              >
-                Anything else we should know?
-              </label>
-              <textarea
-                id="free-text-answer"
-                value={freeText}
-                maxLength={maxFreeTextLength}
-                onChange={(event) => setFreeText(event.target.value)}
-                rows={7}
-                className="w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
-                placeholder="Favorite hobbies, things they already own, delivery notes..."
-              />
-              <p className="mt-2 text-right text-xs text-gray-400">
-                {freeText.length}/{maxFreeTextLength}
-              </p>
-              <div className="mt-5 flex items-center gap-3">
-                <button
-                  type="button"
-                  disabled={phase === 'loading'}
-                  onClick={() => submitQuiz(freeText.trim())}
-                  className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {phase === 'loading' ? 'Finding...' : 'Continue'}
-                </button>
-                <button
-                  type="button"
-                  disabled={phase === 'loading'}
-                  onClick={() => submitQuiz('')}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition hover:border-gray-900 hover:text-gray-900 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
-                >
-                  Skip
-                </button>
-              </div>
-            </div>
-          ) : null}
+        <div className="mb-8 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-purple-50 p-5">
+          <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-indigo-400">
+            <span aria-hidden="true">✨</span>
+            YOUR RECOMMENDATION
+          </p>
+          <p className="text-sm italic leading-relaxed text-gray-700">{result.summary}</p>
         </div>
+
+        <div className="grid grid-cols-1 gap-3">
+          {result.recommendations
+            .slice()
+            .sort((left, right) => left.rank - right.rank)
+            .slice(0, 6)
+            .map((gift) => (
+              <GiftCard
+                key={`${result.recommendationRunId ?? 'run'}-${gift.catalog_item_id}`}
+                gift={gift}
+                recommendationRunId={result.recommendationRunId}
+              />
+            ))}
+        </div>
+
+        {result.recommendations.length === 0 ? (
+          <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-500 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+            No catalog matches yet. Try a wider budget or add more context.
+          </div>
+        ) : null}
+
+        <div className="mt-8 text-center">
+          <button
+            type="button"
+            onClick={startOver}
+            className="text-sm text-gray-400 underline underline-offset-4 transition hover:text-indigo-600"
+          >
+            ← Start over
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mx-auto max-w-2xl px-4 pb-16 pt-24">
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold text-gray-900">Find the perfect gift</h1>
+        <p className="mt-2 text-base text-gray-400">
+          Answer 4 quick questions and we'll match you instantly
+        </p>
       </div>
 
-      {phase === 'loading' ? (
-        <div className="mt-12 flex items-center justify-center rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-          <div className="text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
-            </div>
-            <p className="mt-5 text-sm font-medium text-gray-500">Finding your perfect gifts...</p>
-          </div>
+      {error ? (
+        <div className="mb-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
       ) : null}
 
-      {phase === 'results' && result ? (
-        <div className="mt-12">
-          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="italic leading-7 text-gray-600">{result.summary}</p>
-          </div>
+      <div>
+        {questions.map((question, index) => (
+          <div key={question.key} className="mb-8">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-indigo-500">
+              Question {index + 1}
+            </p>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">{question.heading}</h2>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {question.options.map((option) => {
+                const isSelected = answers[question.key] === option.value;
 
-          <div className="mt-8 grid gap-5 md:grid-cols-2">
-            {result.recommendations
-              .slice()
-              .sort((left, right) => left.rank - right.rank)
-              .slice(0, 6)
-              .map((gift) => (
-                <GiftCard
-                  key={`${result.recommendationRunId ?? 'run'}-${gift.catalog_item_id}`}
-                  gift={gift}
-                  recommendationRunId={result.recommendationRunId}
-                />
-              ))}
-          </div>
-
-          {result.recommendations.length === 0 ? (
-            <div className="mt-8 rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-600">
-              No catalog matches yet. Try a wider budget or add more context.
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleSelect(question.key, option.value)}
+                    className={[
+                      'relative flex select-none flex-col items-center justify-center gap-1.5 rounded-2xl border-2 p-4 transition-all duration-150',
+                      isSelected
+                        ? 'border-indigo-500 bg-indigo-50 shadow-[0_0_0_3px_rgba(99,102,241,0.15)]'
+                        : 'border-gray-100 bg-white hover:border-indigo-200 hover:bg-indigo-50/30',
+                    ].join(' ')}
+                  >
+                    {isSelected ? (
+                      <span
+                        className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] text-white"
+                        aria-hidden="true"
+                      >
+                        ✓
+                      </span>
+                    ) : null}
+                    <span className="text-2xl leading-none" aria-hidden="true">
+                      {option.emoji}
+                    </span>
+                    <span
+                      className={[
+                        'mt-0.5 text-center text-xs font-medium',
+                        isSelected ? 'font-semibold text-indigo-700' : 'text-gray-600',
+                      ].join(' ')}
+                    >
+                      {option.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          ) : null}
-
-          <div className="mt-10 flex justify-center">
-            <button
-              type="button"
-              onClick={startOver}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition hover:border-gray-900 hover:text-gray-900"
-            >
-              Start over
-            </button>
           </div>
+        ))}
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-indigo-500">
+            Question 4
+          </p>
+          <label
+            htmlFor="free-text-answer"
+            className="mb-4 block text-lg font-semibold text-gray-900"
+          >
+            Anything else we should know?
+          </label>
+          <textarea
+            id="free-text-answer"
+            value={freeText}
+            maxLength={maxFreeTextLength}
+            onChange={(event) => setFreeText(event.target.value)}
+            className="h-24 w-full resize-none rounded-2xl border-2 border-gray-100 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition placeholder:text-gray-300 focus:border-indigo-400"
+            placeholder="e.g. She loves plants and just got promoted..."
+          />
+          <p className="mt-1 text-right text-xs text-gray-300">
+            {freeText.length}/{maxFreeTextLength}
+          </p>
         </div>
-      ) : null}
+
+        <button
+          type="button"
+          disabled={!canSubmit}
+          onClick={() => submitQuiz(freeText.trim())}
+          className={[
+            'mt-8 h-14 w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-base font-semibold text-white shadow-lg shadow-indigo-200 transition-all duration-200',
+            canSubmit
+              ? 'hover:-translate-y-0.5 hover:from-indigo-600 hover:to-purple-600 hover:shadow-xl hover:shadow-indigo-300 active:translate-y-0'
+              : 'cursor-not-allowed opacity-40',
+          ].join(' ')}
+        >
+          Find Perfect Gifts →
+        </button>
+      </div>
     </section>
   );
 }
