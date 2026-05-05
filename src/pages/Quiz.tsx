@@ -33,7 +33,7 @@ export type QuizAnswers = {
 };
 
 const maxFreeTextLength = 300;
-const loadingHighlights = ['Budget aware', 'Catalog only', 'Free-text refined'];
+const loadingHighlights = ['Catalog', 'Free text'];
 
 const questions: SelectQuestion[] = [
   {
@@ -203,10 +203,10 @@ export function QuizPage() {
           <div className="relative flex items-start justify-between gap-4">
             <div>
               <p className="giftmatch-loading-kicker text-xs font-semibold uppercase tracking-widest text-indigo-400">
-                Match note
+                Matching
               </p>
               <p className="mt-2 text-xl font-bold leading-tight text-gray-900">
-                Looking for gifts that match the person, not just the keywords.
+                Building a tighter shortlist.
               </p>
             </div>
             <span className="giftmatch-loading-gift flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-xl shadow-[inset_0_0_0_1px_rgba(99,102,241,0.08)]">
@@ -230,10 +230,10 @@ export function QuizPage() {
           </div>
         </div>
         <h1 className="giftmatch-loading-title text-2xl font-bold text-gray-900">
-          Building your shortlist<span className="giftmatch-loading-dots" aria-hidden="true" />
+          Finding gifts<span className="giftmatch-loading-dots" aria-hidden="true" />
         </h1>
         <p className="giftmatch-loading-copy mt-2 text-sm text-gray-400">
-          Comparing your answers with the catalog and returning only the best fits.
+          Ranking the best fits.
         </p>
       </section>
     );

@@ -182,10 +182,10 @@ describe('QuizPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
 
-    expect(await screen.findByText(/building your shortlist/i)).toBeInTheDocument();
-    expect(screen.getByText(/match note/i)).toBeInTheDocument();
+    expect(await screen.findByText(/finding gifts/i)).toBeInTheDocument();
+    expect(screen.getByText(/matching/i)).toBeInTheDocument();
     expect(screen.getByText(/elapsed 0s/i)).toBeInTheDocument();
-    expect(screen.getByText(/free-text refined/i)).toBeInTheDocument();
+    expect(screen.getByText(/free text/i)).toBeInTheDocument();
     resolveRequest(result);
   });
 
