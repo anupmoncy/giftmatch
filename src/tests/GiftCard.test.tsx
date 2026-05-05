@@ -28,6 +28,7 @@ const gift = {
     brand: 'Paper Co',
     category: 'Stationery',
     subcategory: 'Journals',
+    age_tags: ['pre-teen', 'teen', 'young-adult'],
   },
 } satisfies GiftRecommendation;
 

@@ -48,6 +48,7 @@ const result = {
         brand: 'Paper Co',
         category: 'Stationery',
         subcategory: 'Journals',
+        age_tags: ['pre-teen', 'teen', 'young-adult'],
       },
     },
   ],
@@ -63,6 +64,7 @@ function renderQuiz() {
 
 function answerFirstThreeQuestions() {
   fireEvent.click(screen.getByRole('button', { name: /friend/i }));
+  fireEvent.click(screen.getByRole('button', { name: /young adult/i }));
   fireEvent.click(screen.getByRole('button', { name: /creative/i }));
   fireEvent.click(screen.getByRole('button', { name: /\$25-\$50/i }));
 }
@@ -81,6 +83,7 @@ describe('QuizPage', () => {
     renderQuiz();
 
     expect(await screen.findByRole('heading', { name: /who is this for/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /age bucket/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /personality/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /budget/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/anything else/i)).toBeInTheDocument();
@@ -108,6 +111,7 @@ describe('QuizPage', () => {
     await waitFor(() => {
       expect(mockState.findGifts).toHaveBeenCalledWith({
         recipient: 'friend',
+        age: 'young-adult',
         personality: 'creative',
         budget: '25-50',
         freeText: 'They love weekend hikes.',
@@ -124,6 +128,7 @@ describe('QuizPage', () => {
     await waitFor(() => {
       expect(mockState.findGifts).toHaveBeenCalledWith({
         recipient: 'friend',
+        age: 'young-adult',
         personality: 'creative',
         budget: '25-50',
         freeText: '',

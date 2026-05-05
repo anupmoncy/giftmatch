@@ -35,6 +35,7 @@ const catalogItems = [
     brand: 'Paper Co',
     category: 'Stationery',
     subcategory: 'Journals',
+    age_tags: ['pre-teen', 'teen', 'young-adult'],
   },
   {
     id: 'catalog-2',
@@ -45,6 +46,7 @@ const catalogItems = [
     brand: 'North Goods',
     category: 'Outdoors',
     subcategory: 'Drinkware',
+    age_tags: ['teen', 'young-adult', 'middle-age'],
   },
 ];
 
@@ -72,6 +74,7 @@ const validModelOutput = {
 
 const answers = {
   recipient: 'friend',
+  age: 'young-adult',
   personality: 'creative',
   budget: '25-50',
   freeText: 'They love sketching on weekend hikes.',
@@ -305,6 +308,7 @@ describe('findGifts', () => {
       payload: {
         user_id: 'user-1',
         recipient: answers.recipient,
+        age_bucket: answers.age,
         personality: answers.personality,
         budget: 50,
         free_text: answers.freeText,
@@ -357,6 +361,7 @@ describe('findGifts', () => {
       payload: {
         user_id: 'user-1',
         recipient: answers.recipient,
+        age_bucket: answers.age,
         personality: answers.personality,
         budget: 50,
         free_text: answers.freeText,
