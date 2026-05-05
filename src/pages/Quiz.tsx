@@ -279,7 +279,7 @@ export function QuizPage() {
           {questions.map((question, index) => (
             <div
               key={question.key}
-              className="giftmatch-appear-question mb-8"
+              className="giftmatch-appear-question mb-8 border-b border-gray-200/70 pb-8"
               style={{ animationDelay: `${index * 100}ms` }}
             >
               <p
@@ -315,7 +315,7 @@ export function QuizPage() {
           ))}
 
           <div
-            className="giftmatch-appear-question mb-8"
+            className="giftmatch-appear-question mb-8 border-b border-gray-200/70 pb-8"
             style={{ animationDelay: `${questions.length * 100}ms` }}
           >
             <p
