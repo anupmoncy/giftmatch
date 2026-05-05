@@ -20,7 +20,6 @@
     "zod": "latest"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.4",
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
     "@types/node": "latest",
@@ -29,7 +28,7 @@
     "autoprefixer": "latest",
     "jsdom": "latest",
     "postcss": "latest",
-    "tailwindcss": "latest",
+    "tailwindcss": "^3.4.19",
     "typescript": "latest",
     "vite": "latest",
     "vitest": "latest"

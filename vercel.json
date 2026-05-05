@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/find-gifts",
+      "destination": "/api/find-gifts.ts"
+    },
+    {
+      "source": "/api/mcp",
+      "destination": "/api/mcp.ts"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
