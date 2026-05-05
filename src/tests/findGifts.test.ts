@@ -302,6 +302,14 @@ describe('findGifts', () => {
       model: 'gpt-4o-mini',
       summary: validModelOutput.summary,
       recommendations: expect.any(Array),
+      debug_timings: {
+        catalog_fetch: expect.any(Number),
+        prompt_build: expect.any(Number),
+        openai_call: expect.any(Number),
+        parse_validate: expect.any(Number),
+        db_persist: expect.any(Number),
+        total: expect.any(Number),
+      },
     });
   });
 

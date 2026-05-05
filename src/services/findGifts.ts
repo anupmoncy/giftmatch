@@ -90,6 +90,7 @@ export type GiftResult = {
   model: string;
   summary: string;
   recommendations: GiftRecommendation[];
+  debug_timings: StageTimings;
   fallback_mode?: boolean;
 };
 
@@ -101,6 +102,15 @@ type BudgetRange = {
   min?: number;
   max?: number;
   persistedBudget: number | null;
+};
+
+type StageTimings = {
+  catalog_fetch: number;
+  prompt_build: number;
+  openai_call: number;
+  parse_validate: number;
+  db_persist: number;
+  total: number;
 };
 
 class ModelOutputParseError extends Error {
@@ -392,30 +402,22 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
         recommendations: `Rank up to ${MAX_RECOMMENDATIONS} of the supplied catalog items. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates.`,
       },
     },
-    null,
-    2,
   );
 }
 
-async function rankCatalogWithModel(
+function buildOpenAIRankingPrompt(
   answers: z.infer<typeof answersSchema>,
   catalog: CatalogItem[],
-  model: string,
-): Promise<z.infer<typeof modelOutputSchema>> {
-  if (catalog.length === 0) {
-    return {
-      summary:
-        'I could not find catalog items inside that budget yet. Try a wider budget and I can look again with more room to match their style.',
-      recommendations: [],
-    };
-  }
-
-  const client = new OpenAI({ apiKey: getEnv('OPENAI_API_KEY') });
-  const prompt = [
+): string {
+  return [
     'You are GiftMatch. Rank provided catalog items for personal fit and explain the human reason. The application code owns budget filtering and persistence; you only rank the items you receive.',
     '',
     buildRankingPrompt(answers, catalog),
   ].join('\n');
+}
+
+async function requestModelRanking(prompt: string, model: string): Promise<string> {
+  const client = new OpenAI({ apiKey: getEnv('OPENAI_API_KEY') });
   const response = await client.responses.create({
     model,
     input: prompt,
@@ -435,6 +437,10 @@ async function rankCatalogWithModel(
     throw new Error('OpenAI returned an empty recommendation response');
   }
 
+  return rawContent;
+}
+
+function parseAndValidateModelOutput(rawContent: string): z.infer<typeof modelOutputSchema> {
   const parsedContent = parseModelOutputContent(rawContent);
 
   try {
@@ -674,10 +680,31 @@ async function persistFailedRunBestEffort(params: {
   }
 }
 
+function createStageTimings(): StageTimings {
+  return {
+    catalog_fetch: 0,
+    prompt_build: 0,
+    openai_call: 0,
+    parse_validate: 0,
+    db_persist: 0,
+    total: 0,
+  };
+}
+
+function addElapsed(
+  timings: StageTimings,
+  stage: Exclude<keyof StageTimings, 'total'>,
+  startedAt: number,
+) {
+  timings[stage] += Date.now() - startedAt;
+}
+
 export async function findGifts(
   rawAnswers: GiftAnswers,
   options: FindGiftsOptions = {},
 ): Promise<GiftResult> {
+  const startTime = Date.now();
+  const stageTimings = createStageTimings();
   const answers = answersSchema.parse(rawAnswers);
   const budgetRange = parseBudgetRange(answers.budget);
   let model = getOpenAIModel();
@@ -686,33 +713,75 @@ export async function findGifts(
   let failedRunPersisted = false;
 
   try {
-    catalog = selectCatalogForRanking(answers, await fetchBudgetFilteredCatalog(budgetRange));
+    const catalogFetchStartedAt = Date.now();
+    let fetchedCatalog: CatalogItem[];
+    try {
+      fetchedCatalog = await fetchBudgetFilteredCatalog(budgetRange);
+    } finally {
+      addElapsed(stageTimings, 'catalog_fetch', catalogFetchStartedAt);
+    }
+    catalog = selectCatalogForRanking(answers, fetchedCatalog);
 
     try {
-      output = await rankCatalogWithModel(answers, catalog, model);
+      if (catalog.length === 0) {
+        output = {
+          summary:
+            'I could not find catalog items inside that budget yet. Try a wider budget and I can look again with more room to match their style.',
+          recommendations: [],
+        };
+      } else {
+        const promptBuildStartedAt = Date.now();
+        const prompt = buildOpenAIRankingPrompt(answers, catalog);
+        addElapsed(stageTimings, 'prompt_build', promptBuildStartedAt);
+
+        const openAIStartedAt = Date.now();
+        let rawContent: string;
+        try {
+          rawContent = await requestModelRanking(prompt, model);
+        } finally {
+          addElapsed(stageTimings, 'openai_call', openAIStartedAt);
+        }
+
+        const parseValidateStartedAt = Date.now();
+        try {
+          output = parseAndValidateModelOutput(rawContent);
+        } finally {
+          addElapsed(stageTimings, 'parse_validate', parseValidateStartedAt);
+        }
+      }
     } catch (error) {
       if (isModelOutputParseError(error)) {
-        await persistFailedRunBestEffort({
-          answers,
-          budgetRange,
-          model,
-          stage: 'model_output_parse',
-          error,
-          userId: options.userId,
-        });
+        const dbPersistStartedAt = Date.now();
+        try {
+          await persistFailedRunBestEffort({
+            answers,
+            budgetRange,
+            model,
+            stage: 'model_output_parse',
+            error,
+            userId: options.userId,
+          });
+        } finally {
+          addElapsed(stageTimings, 'db_persist', dbPersistStartedAt);
+        }
         failedRunPersisted = true;
         throw error;
       }
 
       if (!isRateLimitError(error)) {
-        await persistFailedRunBestEffort({
-          answers,
-          budgetRange,
-          model,
-          stage: 'model_ranking',
-          error,
-          userId: options.userId,
-        });
+        const dbPersistStartedAt = Date.now();
+        try {
+          await persistFailedRunBestEffort({
+            answers,
+            budgetRange,
+            model,
+            stage: 'model_ranking',
+            error,
+            userId: options.userId,
+          });
+        } finally {
+          addElapsed(stageTimings, 'db_persist', dbPersistStartedAt);
+        }
         failedRunPersisted = true;
         throw error;
       }
@@ -725,6 +794,7 @@ export async function findGifts(
       model = RATE_LIMIT_FALLBACK_MODEL;
     }
 
+    const parseValidateStartedAt = Date.now();
     try {
       validateRankedItems(output, catalog);
     } catch (error) {
@@ -739,42 +809,64 @@ export async function findGifts(
       output = buildRateLimitFallbackOutput(answers, catalog);
       model = RATE_LIMIT_FALLBACK_MODEL;
       validateRankedItems(output, catalog);
+    } finally {
+      addElapsed(stageTimings, 'parse_validate', parseValidateStartedAt);
     }
   } catch (error) {
     if (failedRunPersisted) {
+      stageTimings.total = Date.now() - startTime;
+      console.log(JSON.stringify({ stage_timings_ms: stageTimings }));
       throw error;
     }
 
     if (catalog.length === 0) {
-      await persistFailedRunBestEffort({
-        answers,
-        budgetRange,
-        model,
-        stage: 'catalog_fetch',
-        error,
-        userId: options.userId,
-      });
+      const dbPersistStartedAt = Date.now();
+      try {
+        await persistFailedRunBestEffort({
+          answers,
+          budgetRange,
+          model,
+          stage: 'catalog_fetch',
+          error,
+          userId: options.userId,
+        });
+      } finally {
+        addElapsed(stageTimings, 'db_persist', dbPersistStartedAt);
+      }
     } else if (!(isModelOutputParseError(error) || isRateLimitError(error))) {
-      await persistFailedRunBestEffort({
-        answers,
-        budgetRange,
-        model,
-        stage: 'recommendation_validation',
-        error,
-        userId: options.userId,
-      });
+      const dbPersistStartedAt = Date.now();
+      try {
+        await persistFailedRunBestEffort({
+          answers,
+          budgetRange,
+          model,
+          stage: 'recommendation_validation',
+          error,
+          userId: options.userId,
+        });
+      } finally {
+        addElapsed(stageTimings, 'db_persist', dbPersistStartedAt);
+      }
     }
 
+    stageTimings.total = Date.now() - startTime;
+    console.log(JSON.stringify({ stage_timings_ms: stageTimings }));
     throw error;
   }
 
-  const runs = await persistRuns({
-    answers,
-    budgetRange,
-    model,
-    output,
-    userId: options.userId,
-  });
+  const dbPersistStartedAt = Date.now();
+  let runs: Awaited<ReturnType<typeof persistRuns>>;
+  try {
+    runs = await persistRuns({
+      answers,
+      budgetRange,
+      model,
+      output,
+      userId: options.userId,
+    });
+  } finally {
+    addElapsed(stageTimings, 'db_persist', dbPersistStartedAt);
+  }
 
   const itemsById = new Map(catalog.map((item) => [item.id, item]));
   const recommendations = output.recommendations
@@ -790,11 +882,15 @@ export async function findGifts(
       return { ...recommendation, item };
     });
 
+  stageTimings.total = Date.now() - startTime;
+  console.log(JSON.stringify({ stage_timings_ms: stageTimings }));
+
   return {
     ...runs,
     promptVersion: PROMPT_VERSION,
     model,
     summary: output.summary,
     recommendations,
+    debug_timings: stageTimings,
   };
 }
