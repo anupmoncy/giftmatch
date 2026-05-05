@@ -6,6 +6,7 @@ import { z } from 'zod';
 const PROMPT_VERSION = 'giftmatch-rank-v1';
 const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const RATE_LIMIT_FALLBACK_MODEL = 'catalog-rate-limit-fallback-v1';
+const MODEL_FAILURE_FALLBACK_MODEL = 'catalog-model-fallback-v1';
 const NO_MATCH_ALTERNATIVES_MODEL = 'catalog-no-match-alternatives-v1';
 const MAX_RECOMMENDATIONS = 5;
 const CATALOG_FETCH_LIMIT = 500;
@@ -1234,7 +1235,6 @@ export async function findGifts(
   let catalog: CatalogItem[] = [];
   let output: z.infer<typeof modelOutputSchema>;
   let noExactMatches = false;
-  let failedRunPersisted = false;
 
   try {
     const catalogFetchStartedAt = Date.now();
@@ -1295,48 +1295,12 @@ export async function findGifts(
         }
       }
     } catch (error) {
-      if (isModelOutputParseError(error)) {
-        const dbPersistStartedAt = Date.now();
-        try {
-          await persistFailedRunBestEffort({
-            answers,
-            budgetRange,
-            model,
-            stage: 'model_output_parse',
-            error,
-            userId: options.userId,
-          });
-        } finally {
-          addElapsed(stageTimings, 'db_persist', dbPersistStartedAt);
-        }
-        failedRunPersisted = true;
-        throw error;
-      }
-
-      if (!isRateLimitError(error)) {
-        const dbPersistStartedAt = Date.now();
-        try {
-          await persistFailedRunBestEffort({
-            answers,
-            budgetRange,
-            model,
-            stage: 'model_ranking',
-            error,
-            userId: options.userId,
-          });
-        } finally {
-          addElapsed(stageTimings, 'db_persist', dbPersistStartedAt);
-        }
-        failedRunPersisted = true;
-        throw error;
-      }
-
       console.warn(
-        'OpenAI ranking unavailable; using catalog fallback recommendations',
+        'OpenAI ranking unavailable or invalid; using catalog fallback recommendations',
         summarizeError(error),
       );
       output = buildRateLimitFallbackOutput(answers, catalog);
-      model = RATE_LIMIT_FALLBACK_MODEL;
+      model = isRateLimitError(error) ? RATE_LIMIT_FALLBACK_MODEL : MODEL_FAILURE_FALLBACK_MODEL;
     }
 
     const parseValidateStartedAt = Date.now();
@@ -1365,12 +1329,6 @@ export async function findGifts(
       addElapsed(stageTimings, 'parse_validate', guardrailStartedAt);
     }
   } catch (error) {
-    if (failedRunPersisted) {
-      stageTimings.total = Date.now() - startTime;
-      console.log(JSON.stringify({ stage_timings_ms: stageTimings }));
-      throw error;
-    }
-
     if (catalog.length === 0) {
       const dbPersistStartedAt = Date.now();
       try {

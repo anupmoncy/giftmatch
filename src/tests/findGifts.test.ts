@@ -603,13 +603,14 @@ describe('findGifts', () => {
     });
   });
 
-  it('throws a descriptive error when OpenAI returns malformed JSON', async () => {
+  it('falls back to catalog ranking when OpenAI returns malformed JSON', async () => {
     mockState.responsesCreate.mockResolvedValueOnce({ output_text: '{not-json' });
     const findGifts = await importService();
 
-    await expect(findGifts(answers, { userId: 'user-1' })).rejects.toThrow(
-      /OpenAI returned.*JSON recommendation response/i,
-    );
+    const result = await findGifts(answers, { userId: 'user-1' });
+
+    expect(result.model).toBe('catalog-model-fallback-v1');
+    expect(result.recommendations.length).toBeGreaterThan(0);
     expect(mockState.inserts[0]).toEqual({
       table: 'quiz_runs',
       payload: {
@@ -624,19 +625,9 @@ describe('findGifts', () => {
       table: 'recommendation_runs',
       payload: expect.objectContaining({
         quiz_run_id: 'quiz-run-1',
-        model: 'gpt-4o-mini',
+        model: 'catalog-model-fallback-v1',
         prompt_version: 'giftmatch-rank-v1',
-        summary: expect.stringContaining('Discovery failed during model_output_parse'),
-        ranked_output: expect.objectContaining({
-          status: 'error',
-          stage: 'model_output_parse',
-          answers,
-          error: expect.objectContaining({
-            name: 'ModelOutputParseError',
-            message: 'OpenAI returned a non-JSON recommendation response',
-            stack: expect.any(String),
-          }),
-        }),
+        ranked_output: expect.objectContaining({ recommendations: expect.any(Array) }),
       }),
     });
   });
