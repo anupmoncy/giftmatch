@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
-import type { GiftRecommendation } from '../services/findGifts';
+import { supabase } from '../lib/supabase.js';
+import type { GiftRecommendation } from '../services/findGifts.js';
 
 type GiftCardProps = {
   gift: GiftRecommendation;

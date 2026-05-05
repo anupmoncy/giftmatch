@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { checkAdmin } from '../lib/auth';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 
 type ProfileJoin = {
   email: string | null;
@@ -23,6 +22,11 @@ type QuizRunRow = {
   free_text: string | null;
   profiles: ProfileJoin | ProfileJoin[] | null;
   recommendation_runs: RecommendationRun[] | RecommendationRun | null;
+};
+
+type AdminRunsResponse = {
+  quizRuns?: QuizRunRow[];
+  error?: string;
 };
 
 function asArray<T>(value: T | T[] | null): T[] {
@@ -64,42 +68,38 @@ export function AdminPage() {
 
     async function loadAdminData() {
       try {
-        const isAdmin = await checkAdmin();
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-        if (!isAdmin) {
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!session?.access_token) {
+          navigate('/login', { replace: true });
+          return;
+        }
+
+        const response = await fetch('/api/admin-runs', {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        const body = (await response.json().catch(() => ({}))) as AdminRunsResponse;
+
+        if (response.status === 403) {
           navigate('/quiz', { replace: true });
           return;
         }
 
-        const { data, error: quizError } = await supabase
-          .from('quiz_runs')
-          .select(
-            `
-              id,
-              created_at,
-              recipient,
-              personality,
-              budget,
-              free_text,
-              profiles:user_id (
-                email
-              ),
-              recommendation_runs (
-                id,
-                model,
-                summary,
-                ranked_output
-              )
-            `,
-          )
-          .order('created_at', { ascending: false });
-
-        if (quizError) {
-          throw quizError;
+        if (!response.ok) {
+          throw new Error(body.error ?? 'Could not load admin data.');
         }
 
         if (isMounted) {
-          setQuizRuns((data ?? []) as QuizRunRow[]);
+          setQuizRuns(body.quizRuns ?? []);
         }
       } catch (loadError) {
         if (isMounted) {

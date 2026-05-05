@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { enableDemoAuth } from '../lib/auth';
-import { supabase } from '../lib/supabase';
+import { enableDemoAuth } from '../lib/auth.js';
+import { supabase } from '../lib/supabase.js';
 
 export function LoginPage() {
   const navigate = useNavigate();

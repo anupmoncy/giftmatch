@@ -68,19 +68,21 @@ export async function checkAuth(): Promise<GiftMatchSession | null> {
 export async function checkAdmin(): Promise<boolean> {
   const session = await checkAuth();
 
-  if (!session?.user || 'isDemo' in session) {
+  if (!session?.user || 'isDemo' in session || !session.access_token) {
     return false;
   }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', session.user.id)
-    .single();
+  const response = await fetch('/api/admin-status', {
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
 
-  if (error) {
-    throw error;
+  if (!response.ok) {
+    return false;
   }
 
-  return data?.role === 'admin';
+  const body = (await response.json().catch(() => null)) as { isAdmin?: boolean } | null;
+
+  return body?.isAdmin === true;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { checkAdmin } from '../lib/auth';
+import { checkAdmin } from '../lib/auth.js';
 
 export function NavBar() {
   const [isAdmin, setIsAdmin] = useState(false);

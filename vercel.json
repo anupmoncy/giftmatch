@@ -9,6 +9,14 @@
       "destination": "/api/mcp.ts"
     },
     {
+      "source": "/api/admin-runs",
+      "destination": "/api/admin-runs.ts"
+    },
+    {
+      "source": "/api/admin-status",
+      "destination": "/api/admin-status.ts"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

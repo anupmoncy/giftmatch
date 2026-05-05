@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GiftCard } from '../components/GiftCard';
-import { findGifts, type GiftResult } from '../lib/apiClient';
-import { checkAuth } from '../lib/auth';
+import { GiftCard } from '../components/GiftCard.js';
+import { findGifts, type GiftResult } from '../lib/apiClient.js';
+import { checkAuth } from '../lib/auth.js';
 
 type Phase = 'quiz' | 'loading' | 'results';
 type AnswerKey = 'recipient' | 'personality' | 'budget';

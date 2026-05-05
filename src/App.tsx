@@ -1,8 +1,8 @@
 import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
-import { NavBar } from './components/NavBar';
-import { AdminPage } from './pages/Admin';
-import { LoginPage } from './pages/Login';
-import { QuizPage } from './pages/Quiz';
+import { NavBar } from './components/NavBar.js';
+import { AdminPage } from './pages/Admin.js';
+import { LoginPage } from './pages/Login.js';
+import { QuizPage } from './pages/Quiz.js';
 
 function AppShell() {
   const location = useLocation();
