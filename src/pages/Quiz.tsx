@@ -5,7 +5,7 @@ import { findGifts, type GiftResult } from '../lib/apiClient.js';
 import { checkAuth } from '../lib/auth.js';
 
 type Phase = 'quiz' | 'loading' | 'results';
-type AnswerKey = 'recipient' | 'personality' | 'budget';
+type AnswerKey = 'recipient' | 'age' | 'personality' | 'budget';
 
 type QuizOption = {
   value: string;
@@ -21,6 +21,7 @@ type SelectQuestion = {
 
 export type QuizAnswers = {
   recipient: string;
+  age: string;
   personality: string;
   budget: string;
   freeText: string;
@@ -45,6 +46,19 @@ const questions: SelectQuestion[] = [
       { value: 'coworker', label: 'Coworker', emoji: '💼' },
       { value: 'sibling', label: 'Sibling', emoji: '🙌' },
       { value: 'kid', label: 'Kid', emoji: '🧸' },
+    ],
+  },
+  {
+    key: 'age',
+    heading: 'What age bucket?',
+    options: [
+      { value: 'baby', label: 'Baby', emoji: '🍼' },
+      { value: 'toddler', label: 'Toddler', emoji: '🧩' },
+      { value: 'pre-teen', label: 'Pre-teen', emoji: '🛹' },
+      { value: 'teen', label: 'Teen', emoji: '🎧' },
+      { value: 'young-adult', label: 'Young Adult', emoji: '🌟' },
+      { value: 'middle-age', label: 'Middle Age', emoji: '🏡' },
+      { value: 'senior-citizen', label: 'Senior Citizens', emoji: '🌿' },
     ],
   },
   {
@@ -76,6 +90,7 @@ const questions: SelectQuestion[] = [
 function buildCompleteAnswers(answers: Partial<QuizAnswers>, freeText: string): QuizAnswers {
   return {
     recipient: answers.recipient ?? '',
+    age: answers.age ?? '',
     personality: answers.personality ?? '',
     budget: answers.budget ?? '',
     freeText,
@@ -90,13 +105,14 @@ export function QuizPage() {
   const [result, setResult] = useState<GiftResult | null>(null);
   const [error, setError] = useState('');
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
-  const canSubmit = Boolean(answers.recipient && answers.personality && answers.budget);
+  const canSubmit = Boolean(answers.recipient && answers.age && answers.personality && answers.budget);
   const answeredQuestionCount =
     Number(Boolean(answers.recipient)) +
+    Number(Boolean(answers.age)) +
     Number(Boolean(answers.personality)) +
     Number(Boolean(answers.budget)) +
     Number(Boolean(freeText.trim()));
-  const progressPercent = (answeredQuestionCount / 4) * 100;
+  const progressPercent = (answeredQuestionCount / 5) * 100;
 
   useEffect(() => {
     let isMounted = true;
@@ -134,7 +150,7 @@ export function QuizPage() {
   async function submitQuiz(nextFreeText: string) {
     const completeAnswers = buildCompleteAnswers(answers, nextFreeText);
 
-    if (!completeAnswers.recipient || !completeAnswers.personality || !completeAnswers.budget) {
+    if (!completeAnswers.recipient || !completeAnswers.age || !completeAnswers.personality || !completeAnswers.budget) {
       setError('Please complete the quiz before finding gifts.');
       setPhase('quiz');
       return;
@@ -266,7 +282,7 @@ export function QuizPage() {
           <h1 className="mb-2 text-4xl font-bold leading-tight text-gray-900">
             Find the perfect gift.
           </h1>
-          <p className="text-base text-gray-400">Four questions. Instant AI match.</p>
+          <p className="text-base text-gray-400">Five questions. Instant AI match.</p>
         </div>
 
         {error ? (

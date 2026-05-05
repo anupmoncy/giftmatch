@@ -14,6 +14,7 @@ const MODEL_MAX_OUTPUT_TOKENS = 800;
 
 const answersSchema = z.object({
   recipient: z.string().trim().min(1),
+  age: z.string().trim().optional().default(''),
   personality: z.string().trim().min(1),
   budget: z.string().trim().min(1),
   freeText: z.string().trim().optional().default(''),
@@ -28,6 +29,7 @@ const catalogItemSchema = z.object({
   brand: z.string(),
   category: z.string(),
   subcategory: z.string(),
+  age_tags: z.array(z.string()).optional().default([]),
 });
 
 const modelRecommendationSchema = z
@@ -446,6 +448,7 @@ function normalizeCatalogImage(item: CatalogItem): CatalogItem {
 
   return {
     ...item,
+    age_tags: item.age_tags ?? [],
     image_url: buildCatalogImageDataUri(item),
   };
 }
@@ -463,7 +466,7 @@ async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogIt
 
   let query = getSupabaseAdmin()
     .from('catalog')
-    .select('id, name, description, price, image_url, brand, category, subcategory')
+    .select('id, name, description, price, image_url, brand, category, subcategory, age_tags')
     .order('price', { ascending: true })
     .limit(CATALOG_FETCH_LIMIT);
 
@@ -508,6 +511,7 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
         brand: item.brand,
         category: item.category,
         subcategory: item.subcategory,
+        age_tags: item.age_tags,
       })),
       output_requirements: {
         summary: 'Exactly 2 warm sentences.',
@@ -571,6 +575,7 @@ function parseAndValidateModelOutput(rawContent: string): z.infer<typeof modelOu
 
 function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
   const personality = answers.personality.toLowerCase();
+  const age = answers.age.toLowerCase();
   const freeTextTokens = answers.freeText
     .toLowerCase()
     .split(/[^a-z0-9]+/)
@@ -587,6 +592,7 @@ function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
 
   return [
     answers.recipient.toLowerCase(),
+    age,
     personality,
     ...(personalityKeywords[personality] ?? []),
     ...freeTextTokens,
@@ -594,12 +600,14 @@ function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
 }
 
 function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) {
+  const requestedAge = keywords[1];
   const searchableText = [
     item.name,
     item.description,
     item.brand,
     item.category,
     item.subcategory,
+    ...item.age_tags,
   ]
     .join(' ')
     .toLowerCase();
@@ -607,8 +615,10 @@ function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) 
     (score, keyword) => score + (searchableText.includes(keyword) ? 5 : 0),
     0,
   );
+  const ageScore =
+    requestedAge && item.age_tags.some((ageTag) => ageTag.toLowerCase() === requestedAge) ? 12 : 0;
 
-  return 80 + matchScore - index * 0.5;
+  return 80 + matchScore + ageScore - index * 0.5;
 }
 
 function selectCatalogForRanking(answers: z.infer<typeof answersSchema>, catalog: CatalogItem[]) {
@@ -748,9 +758,10 @@ async function persistRunRecord(params: {
   const { data: quizRun, error: quizRunError } = await supabase
     .from('quiz_runs')
     .insert({
-      user_id: userId,
-      recipient: params.answers.recipient,
-      personality: params.answers.personality,
+        user_id: userId,
+        recipient: params.answers.recipient,
+        age_bucket: params.answers.age || null,
+        personality: params.answers.personality,
       budget: params.budgetRange.persistedBudget,
       free_text: params.answers.freeText,
     })
