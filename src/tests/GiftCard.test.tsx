@@ -32,7 +32,17 @@ const gift = {
 } satisfies GiftRecommendation;
 
 describe('GiftCard', () => {
-  it('falls back when the catalog image fails to load', () => {
+  it('uses subcategory artwork instead of item-specific catalog images', () => {
+    render(<GiftCard gift={gift} recommendationRunId="recommendation-run-1" />);
+
+    const image = screen.getByRole('img', { name: /journals gift image/i });
+
+    expect(image).toHaveAttribute('src', expect.stringMatching(/^data:image\/svg\+xml/));
+    expect(screen.getByText('Stationery')).toBeInTheDocument();
+    expect(screen.getByText('Journals')).toBeInTheDocument();
+  });
+
+  it('falls back when the subcategory artwork fails to load', () => {
     render(
       <GiftCard
         gift={{
@@ -46,14 +56,14 @@ describe('GiftCard', () => {
       />,
     );
 
-    fireEvent.error(screen.getByRole('img', { name: /studio journal/i }));
+    fireEvent.error(screen.getByRole('img', { name: /journals gift image/i }));
 
-    expect(screen.queryByRole('img', { name: /studio journal/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/no image/i)).toBeInTheDocument();
-    expect(screen.getByText('📱')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /journals gift image/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/no subcategory image/i)).toBeInTheDocument();
+    expect(screen.getByText('JO')).toBeInTheDocument();
   });
 
-  it('falls back when the catalog image URL is blank', () => {
+  it('uses subcategory artwork when the catalog image URL is blank', () => {
     render(
       <GiftCard
         gift={{
@@ -68,8 +78,9 @@ describe('GiftCard', () => {
       />,
     );
 
-    expect(screen.queryByRole('img', { name: /studio journal/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/no image/i)).toBeInTheDocument();
-    expect(screen.getByText('👜')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /journals gift image/i })).toHaveAttribute(
+      'src',
+      expect.stringMatching(/^data:image\/svg\+xml/),
+    );
   });
 });

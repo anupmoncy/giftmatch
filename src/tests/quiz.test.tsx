@@ -149,7 +149,7 @@ describe('QuizPage', () => {
     });
   });
 
-  it('renders a loading status brief while findGifts is in flight', async () => {
+  it('renders a loading match note while findGifts is in flight', async () => {
     let resolveRequest!: (value: typeof result) => void;
     mockState.findGifts.mockReturnValueOnce(
       new Promise((resolve) => {
@@ -162,7 +162,8 @@ describe('QuizPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
 
     expect(await screen.findByText(/building your shortlist/i)).toBeInTheDocument();
-    expect(screen.getByText(/live match brief/i)).toBeInTheDocument();
+    expect(screen.getByText(/match note/i)).toBeInTheDocument();
+    expect(screen.getByText(/free-text refined/i)).toBeInTheDocument();
     resolveRequest(result);
   });
 

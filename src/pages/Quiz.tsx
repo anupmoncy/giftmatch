@@ -28,12 +28,7 @@ export type QuizAnswers = {
 };
 
 const maxFreeTextLength = 300;
-const loadingMessages = [
-  'Reading the wish list signals',
-  'Shortlisting catalog standouts',
-  'Checking price fit',
-  'Writing the top picks',
-];
+const loadingHighlights = ['Budget aware', 'Catalog only', 'Free-text refined'];
 
 const questions: SelectQuestion[] = [
   {
@@ -90,7 +85,6 @@ export function QuizPage() {
   const [freeText, setFreeText] = useState('');
   const [result, setResult] = useState<GiftResult | null>(null);
   const [error, setError] = useState('');
-  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const canSubmit = Boolean(answers.recipient && answers.personality && answers.budget);
   const answeredQuestionCount =
     Number(Boolean(answers.recipient)) +
@@ -118,19 +112,6 @@ export function QuizPage() {
       isMounted = false;
     };
   }, [navigate]);
-
-  useEffect(() => {
-    if (phase !== 'loading') {
-      setLoadingMessageIndex(0);
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setLoadingMessageIndex((currentIndex) => (currentIndex + 1) % loadingMessages.length);
-    }, 1500);
-
-    return () => window.clearInterval(intervalId);
-  }, [phase]);
 
   useEffect(() => {
     if (!canSubmit || phase !== 'quiz') {
@@ -185,46 +166,31 @@ export function QuizPage() {
   }, []);
 
   if (phase === 'loading') {
-    const activeLoadingMessage = loadingMessages[loadingMessageIndex];
-
     return (
       <section className="min-h-[calc(100vh-3.5rem)] bg-[#F8FAFC] px-4 pt-28 text-center">
-        <div className="mx-auto mb-7 w-full max-w-sm rounded-2xl border border-white bg-white/85 p-4 text-left shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-          <div className="mb-4 flex items-center justify-between">
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
-              Live match brief
+        <div className="mx-auto mb-7 w-full max-w-sm rounded-2xl border border-white bg-white/85 p-5 text-left shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400">
+                Match note
+              </p>
+              <p className="mt-2 text-xl font-bold leading-tight text-gray-900">
+                Looking for gifts that match the person, not just the keywords.
+              </p>
+            </div>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-xl">
+              🎁
             </span>
-            <span className="text-xs font-medium text-gray-400">Usually under 10s</span>
           </div>
-          <div className="space-y-2">
-            {loadingMessages.map((message, index) => {
-              const isActive = message === activeLoadingMessage;
-              const isDone = index < loadingMessageIndex;
-
-              return (
-                <div
-                  key={message}
-                  className={[
-                    'flex items-center gap-3 rounded-xl px-3 py-2 transition-colors duration-200',
-                    isActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-400',
-                  ].join(' ')}
-                >
-                  <span
-                    className={[
-                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-                      isActive
-                        ? 'bg-indigo-500 text-white'
-                        : isDone
-                          ? 'bg-emerald-100 text-emerald-600'
-                          : 'bg-gray-100 text-gray-400',
-                    ].join(' ')}
-                  >
-                    {isDone ? '✓' : index + 1}
-                  </span>
-                  <span className="text-sm font-semibold">{message}</span>
-                </div>
-              );
-            })}
+          <div className="mt-5 flex flex-wrap gap-2">
+            {loadingHighlights.map((highlight) => (
+              <span
+                key={highlight}
+                className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500"
+              >
+                {highlight}
+              </span>
+            ))}
           </div>
         </div>
         <h1 className="text-2xl font-bold text-gray-900">
