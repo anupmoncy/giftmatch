@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 const PROMPT_VERSION = 'giftmatch-rank-v1';
-const OPENAI_MODEL = 'codex-mini-latest';
+const OPENAI_MODEL = 'gpt-4o-mini';
 const MAX_RECOMMENDATIONS = 6;
 
 const answersSchema = z.object({
