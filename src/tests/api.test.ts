@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockState = vi.hoisted(() => ({
   createClient: vi.fn(),
   findGifts: vi.fn(),
+  warmGiftSearch: vi.fn(),
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -11,6 +12,7 @@ vi.mock('@supabase/supabase-js', () => ({
 
 vi.mock('../../src/services/findGifts.js', () => ({
   findGifts: mockState.findGifts,
+  warmGiftSearch: mockState.warmGiftSearch,
 }));
 
 type TestResponse = {
@@ -95,6 +97,24 @@ async function callHandler(options: {
   return res;
 }
 
+async function callWarmupHandler(options: {
+  headers?: Record<string, string>;
+  body?: unknown;
+  method?: string;
+}) {
+  const { default: handler } = await import('../../api/find-gifts-warmup.js');
+  const res = createResponse();
+  await handler(
+    {
+      method: options.method ?? 'POST',
+      headers: options.headers ?? {},
+      body: options.body ?? { answers: validAnswers },
+    },
+    res,
+  );
+  return res;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
@@ -110,6 +130,11 @@ beforeEach(() => {
     },
   });
   mockState.findGifts.mockResolvedValue(giftResult);
+  mockState.warmGiftSearch.mockResolvedValue({
+    catalogCount: 20,
+    selectedCatalogCount: 5,
+    debug_timings: { catalog_fetch: 5, total: 6 },
+  });
 });
 
 describe('POST /api/find-gifts', () => {
@@ -168,5 +193,33 @@ describe('POST /api/find-gifts', () => {
         summary: expect.any(String),
       }),
     );
+  });
+});
+
+describe('POST /api/find-gifts-warmup', () => {
+  it('warms authenticated gift search without running recommendations', async () => {
+    const res = await callWarmupHandler({
+      headers: { Authorization: 'Bearer valid-token' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockState.createClient().auth.getUser).toHaveBeenCalledWith('valid-token');
+    expect(mockState.warmGiftSearch).toHaveBeenCalledWith(validAnswers);
+    expect(mockState.findGifts).not.toHaveBeenCalled();
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        ok: true,
+        catalogCount: 20,
+        selectedCatalogCount: 5,
+      }),
+    );
+  });
+
+  it('returns 401 for unauthenticated warmup requests', async () => {
+    const res = await callWarmupHandler({});
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: 'Unauthorized' });
+    expect(mockState.warmGiftSearch).not.toHaveBeenCalled();
   });
 });

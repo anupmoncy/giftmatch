@@ -9,6 +9,7 @@ const RATE_LIMIT_FALLBACK_MODEL = 'catalog-rate-limit-fallback-v1';
 const MAX_RECOMMENDATIONS = 5;
 const CATALOG_FETCH_LIMIT = 500;
 const MODEL_CATALOG_LIMIT = 24;
+const QUIZ_FILTER_MIN_CATALOG_ITEMS = MAX_RECOMMENDATIONS;
 const CATALOG_CACHE_TTL_MS = 60_000;
 const MODEL_MAX_OUTPUT_TOKENS = 800;
 
@@ -133,6 +134,12 @@ export type GiftResult = {
   fallback_mode?: boolean;
 };
 
+export type GiftWarmupResult = {
+  catalogCount: number;
+  selectedCatalogCount: number;
+  debug_timings: Pick<StageTimings, 'catalog_fetch' | 'total'>;
+};
+
 export type FindGiftsOptions = {
   userId?: string;
 };
@@ -155,6 +162,12 @@ type StageTimings = {
 type CatalogCacheEntry = {
   expiresAt: number;
   catalog: CatalogItem[];
+};
+
+type CatalogSelection = {
+  catalog: CatalogItem[];
+  quizFilteredCount: number;
+  usedQuizFilter: boolean;
 };
 
 let supabaseAdminClient: SupabaseClient<any, any, any> | null = null;
@@ -538,7 +551,7 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
 
   return JSON.stringify(
     {
-      task: 'Rank only the provided catalog items for gift fit. Do not add items. Do not invent or reuse catalog IDs. Do not filter by budget; the list is already budget-filtered in code.',
+      task: 'Rank only the provided catalog items. Do not add items. Do not invent or reuse catalog IDs. Budget, recipient, and personality filtering already happened in code. Use free_text to rank, select, or eliminate final candidates.',
       allowed_catalog_item_ids: allowedCatalogItemIds,
       catalog: catalog.map((item) => ({
         catalog_item_id: item.id,
@@ -551,9 +564,14 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
       })),
       output_requirements: {
         summary: 'Exactly 2 warm sentences.',
-        recommendations: `Rank up to ${MAX_RECOMMENDATIONS} of the supplied catalog items. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates.`,
+        recommendations: `Rank up to ${MAX_RECOMMENDATIONS} of the supplied catalog items. Use ranks 1-${MAX_RECOMMENDATIONS} without duplicates. Exclude items that conflict with free_text.`,
       },
-      answers,
+      quiz_selection: {
+        recipient: answers.recipient,
+        personality: answers.personality,
+        budget: answers.budget,
+      },
+      free_text: answers.freeText || 'No extra free-text context was provided.',
     },
   );
 }
@@ -742,6 +760,72 @@ function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
   ];
 }
 
+function normalizeSearchValue(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getRecipientKeywords(recipient: string) {
+  const normalized = normalizeSearchValue(recipient);
+  const relatedKeywords: Record<string, string[]> = {
+    partner: ['partner', 'spouse', 'date', 'romantic'],
+    parent: ['parent', 'mom', 'dad', 'mother', 'father'],
+    friend: ['friend'],
+    coworker: ['coworker', 'colleague', 'work', 'desk', 'office'],
+    sibling: ['sibling', 'brother', 'sister'],
+    kid: ['kid', 'child', 'children', 'student'],
+  };
+
+  return [normalized, ...(relatedKeywords[normalized] ?? [])];
+}
+
+function getPersonalityKeywords(personality: string) {
+  const normalized = normalizeSearchValue(personality);
+  const relatedKeywords: Record<string, string[]> = {
+    creative: ['creative', 'art', 'design', 'craft', 'journal', 'paint', 'sketch'],
+    practical: ['practical', 'useful', 'everyday', 'organizer', 'tool', 'productivity'],
+    sentimental: ['sentimental', 'memory', 'photo', 'keepsake', 'thoughtful'],
+    adventurous: ['adventurous', 'adventure', 'outdoor', 'travel', 'hike', 'portable'],
+    cozy: ['cozy', 'warm', 'comfort', 'tea', 'coffee', 'relax', 'reading'],
+    techy: ['techy', 'tech', 'smart', 'device', 'charge', 'digital'],
+  };
+
+  return [normalized, ...(relatedKeywords[normalized] ?? [])];
+}
+
+function itemMatchesAnyKeyword(item: CatalogItem, keywords: string[]) {
+  const searchableText = [
+    item.name,
+    item.description,
+    item.brand,
+    item.category,
+    item.subcategory,
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return keywords.some((keyword) => searchableText.includes(keyword));
+}
+
+function filterCatalogByQuizSelection(
+  answers: z.infer<typeof answersSchema>,
+  catalog: CatalogItem[],
+): CatalogSelection {
+  const recipientKeywords = getRecipientKeywords(answers.recipient);
+  const personalityKeywords = getPersonalityKeywords(answers.personality);
+  const quizFilteredCatalog = catalog.filter(
+    (item) =>
+      itemMatchesAnyKeyword(item, recipientKeywords) &&
+      itemMatchesAnyKeyword(item, personalityKeywords),
+  );
+  const usedQuizFilter = quizFilteredCatalog.length >= QUIZ_FILTER_MIN_CATALOG_ITEMS;
+
+  return {
+    catalog: usedQuizFilter ? quizFilteredCatalog : catalog,
+    quizFilteredCount: quizFilteredCatalog.length,
+    usedQuizFilter,
+  };
+}
+
 function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) {
   const searchableText = [
     item.name,
@@ -761,9 +845,10 @@ function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) 
 }
 
 function selectCatalogForRanking(answers: z.infer<typeof answersSchema>, catalog: CatalogItem[]) {
+  const selectedByQuiz = filterCatalogByQuizSelection(answers, catalog).catalog;
   const keywords = getFallbackKeywords(answers);
 
-  return catalog
+  return selectedByQuiz
     .map((item, index) => ({
       item,
       score: scoreCatalogItem(item, keywords, index),
@@ -1220,5 +1305,32 @@ export async function findGifts(
     summary: output.summary,
     recommendations,
     debug_timings: stageTimings,
+  };
+}
+
+export async function warmGiftSearch(rawAnswers: GiftAnswers): Promise<GiftWarmupResult> {
+  const startTime = Date.now();
+  const stageTimings = createStageTimings();
+  const answers = answersSchema.parse(rawAnswers);
+  const budgetRange = parseBudgetRange(answers.budget);
+  const catalogFetchStartedAt = Date.now();
+
+  let fetchedCatalog: CatalogItem[];
+  try {
+    fetchedCatalog = await fetchBudgetFilteredCatalog(budgetRange);
+  } finally {
+    addElapsed(stageTimings, 'catalog_fetch', catalogFetchStartedAt);
+  }
+
+  const selectedCatalog = selectCatalogForRanking(answers, fetchedCatalog);
+  stageTimings.total = Date.now() - startTime;
+
+  return {
+    catalogCount: fetchedCatalog.length,
+    selectedCatalogCount: selectedCatalog.length,
+    debug_timings: {
+      catalog_fetch: stageTimings.catalog_fetch,
+      total: stageTimings.total,
+    },
   };
 }

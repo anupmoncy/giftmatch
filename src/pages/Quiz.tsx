@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GiftCard } from '../components/GiftCard.js';
-import { findGifts, type GiftResult } from '../lib/apiClient.js';
+import { findGifts, warmFindGifts, type GiftResult } from '../lib/apiClient.js';
 import { checkAuth } from '../lib/auth.js';
 import { quizResetEventName } from '../lib/quizReset.js';
 
@@ -131,6 +131,18 @@ export function QuizPage() {
 
     return () => window.clearInterval(intervalId);
   }, [phase]);
+
+  useEffect(() => {
+    if (!canSubmit || phase !== 'quiz') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      warmFindGifts(buildCompleteAnswers(answers, freeText)).catch(() => undefined);
+    }, 400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [answers, canSubmit, freeText, phase]);
 
   async function submitQuiz(nextFreeText: string) {
     const completeAnswers = buildCompleteAnswers(answers, nextFreeText);

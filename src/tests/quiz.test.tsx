@@ -7,6 +7,7 @@ import { requestQuizReset } from '../lib/quizReset.js';
 const mockState = vi.hoisted(() => ({
   checkAuth: vi.fn(),
   findGifts: vi.fn(),
+  warmFindGifts: vi.fn(),
 }));
 
 vi.mock('../lib/auth.js', () => ({
@@ -15,6 +16,7 @@ vi.mock('../lib/auth.js', () => ({
 
 vi.mock('../lib/apiClient.js', () => ({
   findGifts: mockState.findGifts,
+  warmFindGifts: mockState.warmFindGifts,
 }));
 
 vi.mock('../lib/supabase.js', () => ({
@@ -75,6 +77,7 @@ beforeEach(() => {
     user: { id: 'user-1' },
   });
   mockState.findGifts.mockResolvedValue(result);
+  mockState.warmFindGifts.mockResolvedValue(undefined);
 });
 
 describe('QuizPage', () => {
@@ -124,6 +127,20 @@ describe('QuizPage', () => {
 
     await waitFor(() => {
       expect(mockState.findGifts).toHaveBeenCalledWith({
+        recipient: 'friend',
+        personality: 'creative',
+        budget: '25-50',
+        freeText: '',
+      });
+    });
+  });
+
+  it('preloads the gift search after required answers are selected', async () => {
+    renderQuiz();
+    answerFirstThreeQuestions();
+
+    await waitFor(() => {
+      expect(mockState.warmFindGifts).toHaveBeenCalledWith({
         recipient: 'friend',
         personality: 'creative',
         budget: '25-50',

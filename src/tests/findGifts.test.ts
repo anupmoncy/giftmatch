@@ -254,6 +254,57 @@ describe('findGifts', () => {
     expect(prompt).toContain(catalogItems[1].description);
   });
 
+  it('uses quiz selections to narrow catalog candidates before LLM free-text ranking', async () => {
+    const matchingCatalog = Array.from({ length: 7 }, (_, index) => ({
+      id: `matching-${index}`,
+      name: `Creative Friend Gift ${index}`,
+      description: 'A gift tuned for friend recipients and creative personalities with journaling cues.',
+      price: 30 + index,
+      image_url: null,
+      brand: 'Match Co',
+      category: 'Art',
+      subcategory: 'Journals',
+    }));
+    const unrelatedCatalog = Array.from({ length: 7 }, (_, index) => ({
+      id: `unrelated-${index}`,
+      name: `Practical Parent Gift ${index}`,
+      description: 'A gift tuned for parent recipients and practical personalities with kitchen cues.',
+      price: 30 + index,
+      image_url: null,
+      brand: 'Other Co',
+      category: 'Kitchen',
+      subcategory: 'Tools',
+    }));
+    mockState.createClient.mockReturnValueOnce(
+      createSupabaseClient({
+        data: [...matchingCatalog, ...unrelatedCatalog],
+        error: null,
+      }),
+    );
+    mockState.responsesCreate.mockResolvedValueOnce({
+      output_text: JSON.stringify({
+        summary: 'These picks use the extra context to choose from the quiz-filtered catalog. They avoid items that do not fit the note.',
+        recommendations: matchingCatalog.slice(0, 5).map((item, index) => ({
+          catalog_item_id: item.id,
+          rank: index + 1,
+          score: 95 - index,
+          reason: 'The free text keeps this in the strongest match set.',
+          gift_angle: 'Free-text refined pick',
+          confidence: 'high',
+        })),
+      }),
+    });
+    const findGifts = await importService();
+
+    await findGifts(answers, { userId: 'user-1' });
+
+    const prompt = mockState.responsesCreate.mock.calls[0][0].input as string;
+    expect(prompt).toContain('Use free_text to rank, select, or eliminate final candidates');
+    expect(prompt).toContain(answers.freeText);
+    expect(prompt).toContain('matching-0');
+    expect(prompt).not.toContain('unrelated-0');
+  });
+
   it('parses and validates structured model output fields', async () => {
     const findGifts = await importService();
 

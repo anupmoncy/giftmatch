@@ -3,7 +3,7 @@ import type { GiftAnswers, GiftResult } from '../services/findGifts.js';
 
 export type { GiftAnswers, GiftResult };
 
-export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
+async function getAccessToken() {
   const {
     data: { session },
     error,
@@ -17,11 +17,17 @@ export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
     throw new Error('You must be signed in to find gifts');
   }
 
+  return session.access_token;
+}
+
+export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
+  const accessToken = await getAccessToken();
+
   const response = await fetch('/api/find-gifts', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({ answers }),
   });
@@ -34,4 +40,17 @@ export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
   }
 
   return (await response.json()) as GiftResult;
+}
+
+export async function warmFindGifts(answers: GiftAnswers): Promise<void> {
+  const accessToken = await getAccessToken();
+
+  await fetch('/api/find-gifts-warmup', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ answers }),
+  });
 }
