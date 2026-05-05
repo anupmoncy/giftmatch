@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { findGifts } from '../src/services/findGifts';
+import { findGifts } from '../src/services/findGifts.js';
 
 const findGiftsInput = {
   recipient: z.string().min(1).describe('Who the gift is for'),

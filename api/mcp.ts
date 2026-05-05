@@ -1,5 +1,5 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { createGiftMatchMcpServer } from '../mcp/index';
+import { createGiftMatchMcpServer } from '../mcp/index.js';
 
 type VercelRequest = {
   method?: string;

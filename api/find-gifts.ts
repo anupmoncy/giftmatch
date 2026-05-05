@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { findGifts } from '../src/services/findGifts';
-import type { GiftAnswers } from '../src/services/findGifts';
+import { findGifts } from '../src/services/findGifts.js';
+import type { GiftAnswers } from '../src/services/findGifts.js';
 
 type VercelRequest = {
   method?: string;

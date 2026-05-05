@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 
 const DEMO_AUTH_KEY = 'giftmatch_demo_auth';
 

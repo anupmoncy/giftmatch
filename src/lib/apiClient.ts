@@ -1,6 +1,6 @@
-import { supabase } from './supabase';
-import { isDemoAuthEnabled } from './auth';
-import type { GiftAnswers, GiftResult } from '../services/findGifts';
+import { supabase } from './supabase.js';
+import { isDemoAuthEnabled } from './auth.js';
+import type { GiftAnswers, GiftResult } from '../services/findGifts.js';
 
 export type { GiftAnswers, GiftResult };
 
