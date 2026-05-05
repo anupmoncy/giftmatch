@@ -184,7 +184,7 @@ describe('QuizPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
 
     expect(await screen.findByText(/finding your perfect match/i)).toBeInTheDocument();
-    expect(screen.getByText(/ideal wait is around 10 seconds/i)).toBeInTheDocument();
+    expect(screen.getByText(/ideal wait is around 15 seconds/i)).toBeInTheDocument();
     expect(screen.getByText(/^0s$/i)).toBeInTheDocument();
     expect(screen.getByText(/powered by openai/i)).toBeInTheDocument();
     resolveRequest(result);
