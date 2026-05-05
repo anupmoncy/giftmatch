@@ -199,6 +199,23 @@ describe('QuizPage', () => {
     expect(screen.getByText(result.summary)).toBeInTheDocument();
   });
 
+  it('renders no-item alternatives prominently when no exact matches are returned', async () => {
+    mockState.findGifts.mockResolvedValueOnce({
+      ...result,
+      model: 'catalog-no-match-alternatives-v1',
+      summary: 'No exact catalog matches were found for the selected budget.',
+      no_exact_matches: true,
+    });
+    renderQuiz();
+    answerFirstThreeQuestions();
+
+    fireEvent.click(await screen.findByRole('button', { name: /find perfect gifts/i }));
+
+    expect(await screen.findByText('No items found')).toBeInTheDocument();
+    expect(screen.getByText(/here are the top 5 alternatives/i)).toBeInTheDocument();
+    expect(screen.getByText('Studio Journal')).toBeInTheDocument();
+  });
+
   it('renders an error message when findGifts rejects', async () => {
     mockState.findGifts.mockRejectedValueOnce(new Error('Could not rank gifts.'));
     renderQuiz();

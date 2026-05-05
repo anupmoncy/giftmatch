@@ -6,6 +6,7 @@ import { z } from 'zod';
 const PROMPT_VERSION = 'giftmatch-rank-v1';
 const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const RATE_LIMIT_FALLBACK_MODEL = 'catalog-rate-limit-fallback-v1';
+const NO_MATCH_ALTERNATIVES_MODEL = 'catalog-no-match-alternatives-v1';
 const MAX_RECOMMENDATIONS = 5;
 const CATALOG_FETCH_LIMIT = 500;
 const MODEL_CATALOG_LIMIT = 24;
@@ -140,6 +141,7 @@ export type GiftResult = {
   recommendations: GiftRecommendation[];
   debug_timings: StageTimings;
   fallback_mode?: boolean;
+  no_exact_matches?: boolean;
 };
 
 export type GiftWarmupResult = {
@@ -972,6 +974,23 @@ function buildRateLimitFallbackOutput(
   };
 }
 
+function buildNoMatchAlternativesOutput(
+  answers: z.infer<typeof answersSchema>,
+  catalog: CatalogItem[],
+): z.infer<typeof modelOutputSchema> {
+  const fallbackOutput = buildRateLimitFallbackOutput(answers, catalog);
+
+  return {
+    ...fallbackOutput,
+    summary:
+      'No exact catalog matches were found for the selected budget, so I pulled together the closest live catalog alternatives instead.',
+    recommendations: fallbackOutput.recommendations.map((recommendation) => ({
+      ...recommendation,
+      reason: `Alternative pick: ${recommendation.reason}`,
+    })),
+  };
+}
+
 function repairModelOutputWithCatalog(
   output: z.infer<typeof modelOutputSchema>,
   answers: z.infer<typeof answersSchema>,
@@ -1214,6 +1233,7 @@ export async function findGifts(
   let model = getOpenAIModel();
   let catalog: CatalogItem[] = [];
   let output: z.infer<typeof modelOutputSchema>;
+  let noExactMatches = false;
   let failedRunPersisted = false;
 
   try {
@@ -1228,12 +1248,32 @@ export async function findGifts(
 
     try {
       if (catalog.length === 0) {
-        output = {
-          summary:
-            'I could not find catalog items inside that budget yet. Try a wider budget and I can look again with more room to match their style.',
-          eliminated_catalog_item_ids: [],
-          recommendations: [],
-        };
+        let alternativeCatalog: CatalogItem[] = [];
+
+        if (fetchedCatalog.length === 0 && answers.budget !== 'flexible') {
+          const alternativeCatalogFetchStartedAt = Date.now();
+          try {
+            alternativeCatalog = selectCatalogForRanking(
+              answers,
+              await fetchBudgetFilteredCatalog(parseBudgetRange('flexible')),
+            );
+          } finally {
+            addElapsed(stageTimings, 'catalog_fetch', alternativeCatalogFetchStartedAt);
+          }
+        }
+
+        catalog = alternativeCatalog;
+        noExactMatches = true;
+        model = NO_MATCH_ALTERNATIVES_MODEL;
+        output =
+          catalog.length > 0
+            ? buildNoMatchAlternativesOutput(answers, catalog)
+            : {
+                summary:
+                  'No items found. I could not find catalog items yet, and there are no live alternatives available right now.',
+                eliminated_catalog_item_ids: [],
+                recommendations: [],
+              };
       } else {
         const promptBuildStartedAt = Date.now();
         const prompt = buildOpenAIRankingPrompt(answers, catalog);
@@ -1404,6 +1444,7 @@ export async function findGifts(
     summary: output.summary,
     recommendations,
     debug_timings: stageTimings,
+    ...(noExactMatches ? { no_exact_matches: true } : {}),
   };
 }
 

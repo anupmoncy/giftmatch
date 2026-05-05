@@ -115,11 +115,20 @@ function createInsertQuery(table: string, id: string) {
   return query;
 }
 
-function createSupabaseClient(catalogResult: unknown = { data: catalogItems, error: null }) {
+function createSupabaseClient(
+  catalogResult: unknown | unknown[] = { data: catalogItems, error: null },
+) {
+  const catalogResults = Array.isArray(catalogResult) ? [...catalogResult] : [catalogResult];
+  let catalogResultIndex = 0;
+
   return {
     from: vi.fn((table: string) => {
       if (table === 'catalog') {
-        return createThenableQuery(catalogResult);
+        const result =
+          catalogResults[Math.min(catalogResultIndex, catalogResults.length - 1)] ??
+          { data: [], error: null };
+        catalogResultIndex += 1;
+        return createThenableQuery(result);
       }
 
       if (table === 'quiz_runs') {
@@ -208,20 +217,27 @@ describe('findGifts', () => {
     expect(mockState.limit).toHaveBeenCalledWith(500);
   });
 
-  it('returns an empty result without calling OpenAI when the budget has no catalog matches', async () => {
-    mockState.createClient.mockReturnValueOnce(createSupabaseClient({ data: [], error: null }));
+  it('returns top alternatives without calling OpenAI when the budget has no catalog matches', async () => {
+    mockState.createClient.mockReturnValueOnce(
+      createSupabaseClient([
+        { data: [], error: null },
+        { data: catalogItems, error: null },
+      ]),
+    );
     const findGifts = await importService();
 
     const result = await findGifts(answers, { userId: 'user-1' });
 
     expect(mockState.responsesCreate).not.toHaveBeenCalled();
-    expect(result.recommendations).toEqual([]);
-    expect(result.summary).toContain('could not find catalog items inside that budget');
+    expect(result.no_exact_matches).toBe(true);
+    expect(result.model).toBe('catalog-no-match-alternatives-v1');
+    expect(result.recommendations).toHaveLength(2);
+    expect(result.summary).toContain('No exact catalog matches');
     expect(mockState.inserts[1]).toMatchObject({
       table: 'recommendation_runs',
       payload: expect.objectContaining({
-        model: 'gpt-4o-mini',
-        ranked_output: expect.objectContaining({ recommendations: [] }),
+        model: 'catalog-no-match-alternatives-v1',
+        ranked_output: expect.objectContaining({ recommendations: expect.any(Array) }),
       }),
     });
   });

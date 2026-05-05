@@ -272,9 +272,19 @@ export function QuizPage() {
       maybeFallbackResult.fallback_mode ||
       maybeFallbackResult.fallbackMode ||
       result.model.includes('fallback');
+    const hasNoExactMatches = Boolean(result.no_exact_matches);
 
     return (
       <section className="mx-auto max-w-2xl px-4 pb-16 pt-24">
+        {hasNoExactMatches ? (
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-center shadow-sm shadow-amber-900/5">
+            <p className="text-2xl font-extrabold text-gray-900">No items found</p>
+            <p className="mt-2 text-sm leading-relaxed text-amber-700">
+              Here are some alternatives from the catalog that may still work.
+            </p>
+          </div>
+        ) : null}
+
         {isFallback ? (
           <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs text-amber-600">
             <span aria-hidden="true">⚡</span>
@@ -293,7 +303,9 @@ export function QuizPage() {
         {result.recommendations.length > 0 ? (
           <>
             <p className="mb-3 text-sm font-medium text-gray-500">
-              Here are some close matches we found from the catalog.
+              {hasNoExactMatches
+                ? 'Here are the top 5 alternatives.'
+                : 'Here are some close matches we found from the catalog.'}
             </p>
             <div className="grid grid-cols-1 gap-3">
               {result.recommendations
@@ -312,8 +324,11 @@ export function QuizPage() {
         ) : null}
 
         {result.recommendations.length === 0 ? (
-          <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-500 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-            No catalog matches yet. Try a wider budget or add more context.
+          <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+            <p className="text-2xl font-extrabold text-gray-900">No items found</p>
+            <p className="mt-2 text-sm text-gray-500">
+              No catalog alternatives are available yet. Try a wider budget or add more context.
+            </p>
           </div>
         ) : null}
 
