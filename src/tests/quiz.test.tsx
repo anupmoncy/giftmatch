@@ -7,7 +7,7 @@ import { requestQuizReset } from '../lib/quizReset.js';
 const mockState = vi.hoisted(() => ({
   checkAuth: vi.fn(),
   findGifts: vi.fn(),
-  warmFindGifts: vi.fn(),
+  warmBudgetCatalog: vi.fn(),
 }));
 
 vi.mock('../lib/auth.js', () => ({
@@ -16,7 +16,7 @@ vi.mock('../lib/auth.js', () => ({
 
 vi.mock('../lib/apiClient.js', () => ({
   findGifts: mockState.findGifts,
-  warmFindGifts: mockState.warmFindGifts,
+  warmBudgetCatalog: mockState.warmBudgetCatalog,
 }));
 
 vi.mock('../lib/supabase.js', () => ({
@@ -65,9 +65,9 @@ function renderQuiz() {
 }
 
 function answerFirstThreeQuestions() {
+  fireEvent.click(screen.getByRole('button', { name: /\$25-\$50/i }));
   fireEvent.click(screen.getByRole('button', { name: /friend/i }));
   fireEvent.click(screen.getByRole('button', { name: /creative/i }));
-  fireEvent.click(screen.getByRole('button', { name: /\$25-\$50/i }));
 }
 
 beforeEach(() => {
@@ -77,14 +77,21 @@ beforeEach(() => {
     user: { id: 'user-1' },
   });
   mockState.findGifts.mockResolvedValue(result);
-  mockState.warmFindGifts.mockResolvedValue(undefined);
+  mockState.warmBudgetCatalog.mockResolvedValue(undefined);
 });
 
 describe('QuizPage', () => {
   it('renders all quiz questions on load', async () => {
     renderQuiz();
 
-    expect(await screen.findByRole('heading', { name: /who is this for/i })).toBeInTheDocument();
+    const headings = await screen.findAllByRole('heading', { level: 2 });
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      "What's the budget?",
+      'Who is this for?',
+      "What's their personality?",
+      'Anything else we should know?',
+    ]);
+    expect(screen.getByRole('heading', { name: /who is this for/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /personality/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /budget/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/anything else/i)).toBeInTheDocument();
@@ -135,18 +142,19 @@ describe('QuizPage', () => {
     });
   });
 
-  it('preloads the gift search after required answers are selected', async () => {
+  it('preloads the budget catalog as soon as budget is selected', async () => {
     renderQuiz();
-    answerFirstThreeQuestions();
+    fireEvent.click(await screen.findByRole('button', { name: /\$25-\$50/i }));
 
     await waitFor(() => {
-      expect(mockState.warmFindGifts).toHaveBeenCalledWith({
-        recipient: 'friend',
-        personality: 'creative',
+      expect(mockState.warmBudgetCatalog).toHaveBeenCalledWith({
         budget: '25-50',
-        freeText: '',
       });
     });
+
+    fireEvent.click(screen.getByRole('button', { name: /friend/i }));
+    fireEvent.click(screen.getByRole('button', { name: /creative/i }));
+    expect(mockState.warmBudgetCatalog).toHaveBeenCalledTimes(1);
   });
 
   it('renders a loading match note while findGifts is in flight', async () => {

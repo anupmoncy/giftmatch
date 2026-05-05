@@ -204,7 +204,7 @@ describe('POST /api/find-gifts-warmup', () => {
 
     expect(res.statusCode).toBe(200);
     expect(mockState.createClient().auth.getUser).toHaveBeenCalledWith('valid-token');
-    expect(mockState.warmGiftSearch).toHaveBeenCalledWith(validAnswers);
+    expect(mockState.warmGiftSearch).toHaveBeenCalledWith({ budget: validAnswers.budget });
     expect(mockState.findGifts).not.toHaveBeenCalled();
     expect(res.body).toEqual(
       expect.objectContaining({

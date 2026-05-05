@@ -118,6 +118,9 @@ type CatalogItem = z.infer<typeof catalogItemSchema>;
 type ModelRecommendation = z.infer<typeof modelRecommendationSchema>;
 
 export type GiftAnswers = z.input<typeof answersSchema>;
+export type GiftWarmupAnswers = {
+  budget: string;
+};
 
 export type GiftRecommendation = ModelRecommendation & {
   item: CatalogItem;
@@ -1372,11 +1375,10 @@ export async function findGifts(
   };
 }
 
-export async function warmGiftSearch(rawAnswers: GiftAnswers): Promise<GiftWarmupResult> {
+export async function warmGiftSearch(rawAnswers: GiftWarmupAnswers): Promise<GiftWarmupResult> {
   const startTime = Date.now();
   const stageTimings = createStageTimings();
-  const answers = answersSchema.parse(rawAnswers);
-  const budgetRange = parseBudgetRange(answers.budget);
+  const budgetRange = parseBudgetRange(z.string().trim().min(1).parse(rawAnswers.budget));
   const catalogFetchStartedAt = Date.now();
 
   let fetchedCatalog: CatalogItem[];
@@ -1386,12 +1388,11 @@ export async function warmGiftSearch(rawAnswers: GiftAnswers): Promise<GiftWarmu
     addElapsed(stageTimings, 'catalog_fetch', catalogFetchStartedAt);
   }
 
-  const selectedCatalog = selectCatalogForRanking(answers, fetchedCatalog);
   stageTimings.total = Date.now() - startTime;
 
   return {
     catalogCount: fetchedCatalog.length,
-    selectedCatalogCount: selectedCatalog.length,
+    selectedCatalogCount: fetchedCatalog.length,
     debug_timings: {
       catalog_fetch: stageTimings.catalog_fetch,
       total: stageTimings.total,

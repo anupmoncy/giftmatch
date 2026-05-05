@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GiftCard } from '../components/GiftCard.js';
-import { findGifts, warmFindGifts, type GiftResult } from '../lib/apiClient.js';
+import { findGifts, warmBudgetCatalog, type GiftResult } from '../lib/apiClient.js';
 import { checkAuth } from '../lib/auth.js';
 import { quizResetEventName } from '../lib/quizReset.js';
 
@@ -32,6 +32,18 @@ const loadingHighlights = ['Budget aware', 'Catalog only', 'Free-text refined'];
 
 const questions: SelectQuestion[] = [
   {
+    key: 'budget',
+    heading: "What's the budget?",
+    options: [
+      { value: 'under-25', label: 'Under $25', emoji: '🌱' },
+      { value: '25-50', label: '$25-$50', emoji: '🎁' },
+      { value: '50-100', label: '$50-$100', emoji: '✨' },
+      { value: '100-200', label: '$100-$200', emoji: '💎' },
+      { value: 'splurge', label: 'Splurge', emoji: '🚀' },
+      { value: 'flexible', label: 'Flexible', emoji: '🔎' },
+    ],
+  },
+  {
     key: 'recipient',
     heading: 'Who is this for?',
     options: [
@@ -55,18 +67,6 @@ const questions: SelectQuestion[] = [
       { value: 'techy', label: 'Techy', emoji: '⚡' },
     ],
   },
-  {
-    key: 'budget',
-    heading: "What's the budget?",
-    options: [
-      { value: 'under-25', label: 'Under $25', emoji: '🌱' },
-      { value: '25-50', label: '$25-$50', emoji: '🎁' },
-      { value: '50-100', label: '$50-$100', emoji: '✨' },
-      { value: '100-200', label: '$100-$200', emoji: '💎' },
-      { value: 'splurge', label: 'Splurge', emoji: '🚀' },
-      { value: 'flexible', label: 'Flexible', emoji: '🔎' },
-    ],
-  },
 ];
 
 function buildCompleteAnswers(answers: Partial<QuizAnswers>, freeText: string): QuizAnswers {
@@ -85,6 +85,7 @@ export function QuizPage() {
   const [freeText, setFreeText] = useState('');
   const [result, setResult] = useState<GiftResult | null>(null);
   const [error, setError] = useState('');
+  const warmedBudgetRef = useRef<string | null>(null);
   const canSubmit = Boolean(answers.recipient && answers.personality && answers.budget);
   const answeredQuestionCount =
     Number(Boolean(answers.recipient)) +
@@ -114,16 +115,19 @@ export function QuizPage() {
   }, [navigate]);
 
   useEffect(() => {
-    if (!canSubmit || phase !== 'quiz') {
+    if (!answers.budget || phase !== 'quiz' || warmedBudgetRef.current === answers.budget) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      warmFindGifts(buildCompleteAnswers(answers, freeText)).catch(() => undefined);
-    }, 400);
+      warmedBudgetRef.current = answers.budget ?? null;
+      warmBudgetCatalog({ budget: answers.budget ?? '' }).catch(() => {
+        warmedBudgetRef.current = null;
+      });
+    }, 150);
 
     return () => window.clearTimeout(timeoutId);
-  }, [answers, canSubmit, freeText, phase]);
+  }, [answers.budget, phase]);
 
   async function submitQuiz(nextFreeText: string) {
     const completeAnswers = buildCompleteAnswers(answers, nextFreeText);
@@ -158,6 +162,7 @@ export function QuizPage() {
     setFreeText('');
     setResult(null);
     setError('');
+    warmedBudgetRef.current = null;
   }
 
   useEffect(() => {
@@ -167,36 +172,38 @@ export function QuizPage() {
 
   if (phase === 'loading') {
     return (
-      <section className="min-h-[calc(100vh-3.5rem)] bg-[#F8FAFC] px-4 pt-28 text-center">
-        <div className="mx-auto mb-7 w-full max-w-sm rounded-2xl border border-white bg-white/85 p-5 text-left shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-          <div className="flex items-start justify-between gap-4">
+      <section className="min-h-[calc(100vh-3.5rem)] overflow-hidden bg-[#F8FAFC] px-4 pt-28 text-center">
+        <div className="giftmatch-loading-card relative mx-auto mb-7 w-full max-w-sm overflow-hidden rounded-2xl border border-white bg-white/90 p-5 text-left shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+          <div className="giftmatch-loading-sheen" aria-hidden="true" />
+          <div className="relative flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400">
+              <p className="giftmatch-loading-kicker text-xs font-semibold uppercase tracking-widest text-indigo-400">
                 Match note
               </p>
               <p className="mt-2 text-xl font-bold leading-tight text-gray-900">
                 Looking for gifts that match the person, not just the keywords.
               </p>
             </div>
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-xl">
+            <span className="giftmatch-loading-gift flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-xl shadow-[inset_0_0_0_1px_rgba(99,102,241,0.08)]">
               🎁
             </span>
           </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {loadingHighlights.map((highlight) => (
+          <div className="relative mt-5 flex flex-wrap gap-2">
+            {loadingHighlights.map((highlight, index) => (
               <span
                 key={highlight}
-                className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500"
+                className="giftmatch-loading-chip rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500"
+                style={{ animationDelay: `${120 + index * 90}ms` }}
               >
                 {highlight}
               </span>
             ))}
           </div>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Building your shortlist...
+        <h1 className="giftmatch-loading-title text-2xl font-bold text-gray-900">
+          Building your shortlist<span className="giftmatch-loading-dots" aria-hidden="true" />
         </h1>
-        <p className="mt-2 text-sm text-gray-400">
+        <p className="giftmatch-loading-copy mt-2 text-sm text-gray-400">
           Comparing your answers with the catalog and returning only the best fits.
         </p>
       </section>

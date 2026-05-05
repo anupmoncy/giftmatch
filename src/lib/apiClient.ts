@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js';
-import type { GiftAnswers, GiftResult } from '../services/findGifts.js';
+import type { GiftAnswers, GiftResult, GiftWarmupAnswers } from '../services/findGifts.js';
 
-export type { GiftAnswers, GiftResult };
+export type { GiftAnswers, GiftResult, GiftWarmupAnswers };
 
 async function getAccessToken() {
   const {
@@ -42,7 +42,7 @@ export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
   return (await response.json()) as GiftResult;
 }
 
-export async function warmFindGifts(answers: GiftAnswers): Promise<void> {
+export async function warmBudgetCatalog(answers: GiftWarmupAnswers): Promise<void> {
   const accessToken = await getAccessToken();
 
   await fetch('/api/find-gifts-warmup', {

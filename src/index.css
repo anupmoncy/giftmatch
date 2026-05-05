@@ -49,6 +49,50 @@ body {
   animation: giftmatch-arrow-bounce 600ms ease infinite;
 }
 
+.giftmatch-loading-card {
+  animation: giftmatch-loading-card-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.giftmatch-loading-sheen {
+  animation: giftmatch-loading-sheen 2600ms ease-in-out infinite;
+  background: linear-gradient(110deg, transparent 24%, rgba(129, 140, 248, 0.12), transparent 72%);
+  inset: 0;
+  position: absolute;
+  transform: translateX(-78%);
+}
+
+.giftmatch-loading-kicker {
+  animation: giftmatch-loading-kicker 1800ms ease-in-out infinite;
+}
+
+.giftmatch-loading-gift {
+  animation: giftmatch-loading-gift 2200ms ease-in-out infinite;
+}
+
+.giftmatch-loading-chip {
+  animation: giftmatch-loading-chip-in 420ms ease both;
+  opacity: 0;
+  transform: translateY(0.5rem);
+}
+
+.giftmatch-loading-title {
+  animation: giftmatch-loading-text-in 480ms ease 120ms both;
+}
+
+.giftmatch-loading-copy {
+  animation: giftmatch-loading-text-in 480ms ease 220ms both;
+}
+
+.giftmatch-loading-dots::after {
+  animation: giftmatch-loading-dots 1400ms steps(4, end) infinite;
+  content: "";
+  display: inline-block;
+  overflow: hidden;
+  text-align: left;
+  vertical-align: bottom;
+  width: 1.25em;
+}
+
 @keyframes giftmatch-appear {
   to {
     opacity: 1;
@@ -64,5 +108,113 @@ body {
 
   50% {
     transform: translateX(0.25rem);
+  }
+}
+
+@keyframes giftmatch-loading-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.85rem) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes giftmatch-loading-sheen {
+  0%,
+  45% {
+    transform: translateX(-78%);
+  }
+
+  100% {
+    transform: translateX(78%);
+  }
+}
+
+@keyframes giftmatch-loading-kicker {
+  0%,
+  100% {
+    color: #818cf8;
+  }
+
+  50% {
+    color: #4f46e5;
+  }
+}
+
+@keyframes giftmatch-loading-gift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+
+  50% {
+    transform: translateY(-0.35rem) rotate(3deg);
+  }
+}
+
+@keyframes giftmatch-loading-chip-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes giftmatch-loading-text-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes giftmatch-loading-dots {
+  0% {
+    content: "";
+  }
+
+  25% {
+    content: ".";
+  }
+
+  50% {
+    content: "..";
+  }
+
+  75%,
+  100% {
+    content: "...";
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .giftmatch-loading-card,
+  .giftmatch-loading-sheen,
+  .giftmatch-loading-kicker,
+  .giftmatch-loading-gift,
+  .giftmatch-loading-chip,
+  .giftmatch-loading-title,
+  .giftmatch-loading-copy,
+  .giftmatch-loading-dots::after {
+    animation: none;
+  }
+
+  .giftmatch-loading-card,
+  .giftmatch-loading-chip,
+  .giftmatch-loading-title,
+  .giftmatch-loading-copy {
+    opacity: 1;
+    transform: none;
+  }
+
+  .giftmatch-loading-dots::after {
+    content: "...";
   }
 }

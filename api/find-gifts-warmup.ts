@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { warmGiftSearch } from '../src/services/findGifts.js';
-import type { GiftAnswers } from '../src/services/findGifts.js';
+import type { GiftWarmupAnswers } from '../src/services/findGifts.js';
 
 type VercelRequest = {
   method?: string;
@@ -30,22 +30,14 @@ function getBearerToken(req: VercelRequest): string | undefined {
   return match?.[1];
 }
 
-function isValidAnswers(value: unknown): value is GiftAnswers {
+function isValidAnswers(value: unknown): value is GiftWarmupAnswers {
   if (!value || typeof value !== 'object') {
     return false;
   }
 
-  const candidate = value as Partial<Record<keyof GiftAnswers, unknown>>;
+  const candidate = value as Partial<GiftWarmupAnswers>;
 
-  return (
-    typeof candidate.recipient === 'string' &&
-    candidate.recipient.trim().length > 0 &&
-    typeof candidate.personality === 'string' &&
-    candidate.personality.trim().length > 0 &&
-    typeof candidate.budget === 'string' &&
-    candidate.budget.trim().length > 0 &&
-    (candidate.freeText === undefined || typeof candidate.freeText === 'string')
-  );
+  return typeof candidate.budget === 'string' && candidate.budget.trim().length > 0;
 }
 
 function getSupabaseAuthClient() {
@@ -82,8 +74,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const requestBody = req.body as { answers?: GiftAnswers };
-    const answers = requestBody.answers ?? (req.body as GiftAnswers);
+    const requestBody = req.body as { answers?: GiftWarmupAnswers };
+    const answers = requestBody.answers ?? (req.body as GiftWarmupAnswers);
 
     if (!isValidAnswers(answers)) {
       res.status(400).json({ error: 'Missing or malformed gift answers' });
@@ -107,7 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const result = await warmGiftSearch(answers);
+    const result = await warmGiftSearch({ budget: answers.budget });
     res.status(200).json({ ok: true, ...result });
   } catch (error) {
     console.warn('find-gifts warmup failed', error);
