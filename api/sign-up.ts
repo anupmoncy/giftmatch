@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { normalizeAuthIdentifier } from '../src/lib/userIdentity.js';
 
 type VercelRequest = {
   method?: string;
@@ -55,10 +56,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { username, password } = (req.body ?? {}) as SignUpBody;
 
-    if (typeof username !== 'string' || username.length === 0) {
+    if (typeof username !== 'string' || username.trim().length === 0) {
       res.status(400).json({ error: 'Username is required' });
       return;
     }
+
+    const normalizedUsername = username.trim();
 
     if (typeof password !== 'string' || password.length < 6) {
       res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -69,10 +72,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: { user },
       error,
     } = await getSupabaseAdminClient().auth.admin.createUser({
-      email: username,
+      email: normalizeAuthIdentifier(normalizedUsername),
       password,
       email_confirm: true,
-      user_metadata: { username },
+      user_metadata: { username: normalizedUsername },
     });
 
     if (error || !user) {

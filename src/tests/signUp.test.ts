@@ -69,7 +69,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/sign-up', () => {
-  it('creates a confirmed user with the provided username as the email', async () => {
+  it('creates a confirmed user with an email username unchanged', async () => {
     const res = await callHandler({});
 
     expect(res.statusCode).toBe(201);
@@ -80,6 +80,18 @@ describe('POST /api/sign-up', () => {
       user_metadata: { username: 'friend@example.com' },
     });
     expect(res.body).toEqual({ userId: 'user-1' });
+  });
+
+  it('creates a confirmed user with a non-email username as an internal email', async () => {
+    const res = await callHandler({ body: { username: ' Gift Fan ', password: 'secret1' } });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockState.createUser).toHaveBeenCalledWith({
+      email: 'gift-fan@users.giftmatch.app',
+      password: 'secret1',
+      email_confirm: true,
+      user_metadata: { username: 'Gift Fan' },
+    });
   });
 
   it('returns 400 for a short password', async () => {

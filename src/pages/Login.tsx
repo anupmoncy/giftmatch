@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase.js';
+import { normalizeAuthIdentifier } from '../lib/userIdentity.js';
 
 async function createConfirmedUser(username: string, password: string) {
   const response = await fetch('/api/sign-up', {
@@ -20,7 +21,7 @@ async function createConfirmedUser(username: string, password: string) {
 export function LoginPage() {
   const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -34,11 +35,14 @@ export function LoginPage() {
 
     try {
       if (isSignUp) {
-        await createConfirmedUser(email, password);
+        await createConfirmedUser(username, password);
         setNotice('Skipping verification for the demo');
       }
 
-      const authResponse = await supabase.auth.signInWithPassword({ email, password });
+      const authResponse = await supabase.auth.signInWithPassword({
+        email: normalizeAuthIdentifier(username),
+        password,
+      });
 
       if (authResponse.error) {
         setError(authResponse.error.message);
@@ -99,16 +103,16 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <label htmlFor="email" className="text-sm font-semibold text-gray-700">
-              Email
+            <label htmlFor="username" className="text-sm font-semibold text-gray-700">
+              Username or email
             </label>
             <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              id="username"
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
               required
-              autoComplete="email"
+              autoComplete="username"
               className="mt-2 w-full rounded-xl border-2 border-gray-100 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-indigo-400"
             />
           </div>
