@@ -1,6 +1,5 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { enableDemoAuth } from '../lib/auth.js';
 import { supabase } from '../lib/supabase.js';
 
 export function LoginPage() {
@@ -10,11 +9,6 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  function continueInDemoMode() {
-    enableDemoAuth(email);
-    navigate('/quiz', { replace: true });
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,17 +22,12 @@ export function LoginPage() {
     setIsSubmitting(false);
 
     if (authResponse.error) {
-      if (authResponse.error.message.toLowerCase().includes('email not confirmed')) {
-        continueInDemoMode();
-        return;
-      }
-
       setError(authResponse.error.message);
       return;
     }
 
     if (isSignUp && !authResponse.data.session) {
-      continueInDemoMode();
+      setError('Please confirm your email before signing in.');
       return;
     }
 
@@ -54,7 +43,7 @@ export function LoginPage() {
         </h1>
         <p className="mt-3 text-gray-500">
           {isSignUp
-            ? 'Sign up to start matching thoughtful gift ideas. Demo sign-up bypasses email verification so reviewers can get in immediately.'
+            ? 'Sign up to start matching thoughtful gift ideas.'
             : 'Sign in to start matching gifts.'}
         </p>
 

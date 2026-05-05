@@ -1,11 +1,9 @@
 import { supabase } from './supabase.js';
-import { isDemoAuthEnabled } from './auth.js';
 import type { GiftAnswers, GiftResult } from '../services/findGifts.js';
 
 export type { GiftAnswers, GiftResult };
 
 export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
-  const isDemo = isDemoAuthEnabled();
   const {
     data: { session },
     error,
@@ -15,7 +13,7 @@ export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
     throw error;
   }
 
-  if (!session?.access_token && !isDemo) {
+  if (!session?.access_token) {
     throw new Error('You must be signed in to find gifts');
   }
 
@@ -23,8 +21,7 @@ export async function findGifts(answers: GiftAnswers): Promise<GiftResult> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-      ...(isDemo ? { 'X-GiftMatch-Demo': 'true' } : {}),
+      Authorization: `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({ answers }),
   });

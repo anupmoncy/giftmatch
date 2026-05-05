@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 const PROMPT_VERSION = 'giftmatch-rank-v1';
-const OPENAI_MODEL = 'gpt-4o-mini';
+const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
+const RATE_LIMIT_FALLBACK_MODEL = 'catalog-rate-limit-fallback-v1';
 const MAX_RECOMMENDATIONS = 6;
 
 const answersSchema = z.object({
@@ -90,6 +91,34 @@ function getSupabaseAdmin() {
   });
 }
 
+function getOpenAIModel() {
+  return getEnv('OPENAI_MODEL') ?? DEFAULT_OPENAI_MODEL;
+}
+
+function isRateLimitError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as {
+    status?: number;
+    code?: string | null;
+    type?: string | null;
+    error?: {
+      code?: string | null;
+      type?: string | null;
+    };
+  };
+
+  return (
+    candidate.status === 429 ||
+    candidate.code === 'insufficient_quota' ||
+    candidate.type === 'insufficient_quota' ||
+    candidate.error?.code === 'insufficient_quota' ||
+    candidate.error?.type === 'insufficient_quota'
+  );
+}
+
 function parseBudgetRange(budget: string): BudgetRange {
   const normalized = budget.trim().toLowerCase();
   const numbers = Array.from(normalized.matchAll(/\d+(?:\.\d+)?/g), (match) => Number(match[0]));
@@ -172,6 +201,7 @@ function buildRankingPrompt(answers: z.infer<typeof answersSchema>, catalog: Cat
 async function rankCatalogWithModel(
   answers: z.infer<typeof answersSchema>,
   catalog: CatalogItem[],
+  model: string,
 ): Promise<z.infer<typeof modelOutputSchema>> {
   if (catalog.length === 0) {
     return {
@@ -188,7 +218,7 @@ async function rankCatalogWithModel(
     buildRankingPrompt(answers, catalog),
   ].join('\n');
   const response = await client.responses.create({
-    model: OPENAI_MODEL,
+    model,
     input: prompt,
   });
 
@@ -199,6 +229,80 @@ async function rankCatalogWithModel(
   }
 
   return modelOutputSchema.parse(JSON.parse(rawContent));
+}
+
+function getFallbackKeywords(answers: z.infer<typeof answersSchema>): string[] {
+  const personality = answers.personality.toLowerCase();
+  const freeTextTokens = answers.freeText
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 4);
+
+  const personalityKeywords: Record<string, string[]> = {
+    creative: ['art', 'creative', 'design', 'craft', 'journal', 'write', 'studio'],
+    practical: ['useful', 'everyday', 'home', 'kitchen', 'work', 'organizer', 'tool'],
+    sentimental: ['photo', 'memory', 'personal', 'keepsake', 'cozy', 'thoughtful'],
+    adventurous: ['outdoor', 'travel', 'sport', 'portable', 'durable', 'ready'],
+    cozy: ['warm', 'comfort', 'home', 'soft', 'tea', 'coffee', 'relax'],
+    techy: ['tech', 'smart', 'device', 'charge', 'audio', 'clever'],
+  };
+
+  return [
+    answers.recipient.toLowerCase(),
+    personality,
+    ...(personalityKeywords[personality] ?? []),
+    ...freeTextTokens,
+  ];
+}
+
+function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) {
+  const searchableText = [
+    item.name,
+    item.description,
+    item.brand,
+    item.category,
+    item.subcategory,
+  ]
+    .join(' ')
+    .toLowerCase();
+  const matchScore = keywords.reduce(
+    (score, keyword) => score + (searchableText.includes(keyword) ? 5 : 0),
+    0,
+  );
+
+  return 80 + matchScore - index * 0.5;
+}
+
+function buildRateLimitFallbackOutput(
+  answers: z.infer<typeof answersSchema>,
+  catalog: CatalogItem[],
+): z.infer<typeof modelOutputSchema> {
+  const keywords = getFallbackKeywords(answers);
+  const rankedItems = catalog
+    .map((item, index) => ({
+      item,
+      score: scoreCatalogItem(item, keywords, index),
+    }))
+    .sort((left, right) => right.score - left.score || left.item.price - right.item.price)
+    .slice(0, MAX_RECOMMENDATIONS);
+
+  return {
+    summary:
+      'The smart ranker is temporarily unavailable, so I matched gifts from the live catalog with a backup ranker. These picks are budget-aware and saved to admin history so the test flow stays reviewable.',
+    recommendations: rankedItems.map(({ item, score }, index) => {
+      const rank = index + 1;
+      const confidence = rank <= 2 ? 'high' : rank <= 4 ? 'medium' : 'low';
+
+      return {
+        catalog_item_id: item.id,
+        rank,
+        score: Math.max(60, Math.min(99, Math.round(score))),
+        reason: `${item.name} fits a ${answers.personality} ${answers.recipient} because it lines up with ${item.subcategory.toLowerCase()} interests and stays within the selected budget.`,
+        gift_angle: `${answers.personality} ${item.subcategory}`,
+        confidence,
+      };
+    }),
+  };
 }
 
 function validateRankedItems(output: z.infer<typeof modelOutputSchema>, catalog: CatalogItem[]) {
@@ -231,13 +335,13 @@ async function persistRuns(params: {
   output: z.infer<typeof modelOutputSchema>;
   userId?: string;
 }) {
+  const supabase = getSupabaseAdmin();
   const userId = params.userId ?? getEnv('GIFTMATCH_MCP_USER_ID');
 
   if (!userId) {
     return { quizRunId: null, recommendationRunId: null };
   }
 
-  const supabase = getSupabaseAdmin();
   const { data: quizRun, error: quizRunError } = await supabase
     .from('quiz_runs')
     .insert({
@@ -282,9 +386,21 @@ export async function findGifts(
 ): Promise<GiftResult> {
   const answers = answersSchema.parse(rawAnswers);
   const budgetRange = parseBudgetRange(answers.budget);
-  const model = OPENAI_MODEL;
+  let model = getOpenAIModel();
   const catalog = await fetchBudgetFilteredCatalog(budgetRange);
-  const output = await rankCatalogWithModel(answers, catalog);
+  let output: z.infer<typeof modelOutputSchema>;
+
+  try {
+    output = await rankCatalogWithModel(answers, catalog, model);
+  } catch (error) {
+    if (!isRateLimitError(error)) {
+      throw error;
+    }
+
+    console.warn('OpenAI quota exhausted; using catalog fallback recommendations', error);
+    output = buildRateLimitFallbackOutput(answers, catalog);
+    model = RATE_LIMIT_FALLBACK_MODEL;
+  }
 
   validateRankedItems(output, catalog);
 
