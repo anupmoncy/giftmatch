@@ -192,7 +192,7 @@ export function QuizPage() {
           {result.recommendations
             .slice()
             .sort((left, right) => left.rank - right.rank)
-            .slice(0, 6)
+            .slice(0, 5)
             .map((gift) => (
               <GiftCard
                 key={`${result.recommendationRunId ?? 'run'}-${gift.catalog_item_id}`}

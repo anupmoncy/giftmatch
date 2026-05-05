@@ -5,6 +5,10 @@
       "destination": "/api/find-gifts.ts"
     },
     {
+      "source": "/api/sign-up",
+      "destination": "/api/sign-up.ts"
+    },
+    {
       "source": "/api/mcp",
       "destination": "/api/mcp.ts"
     },

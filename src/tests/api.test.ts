@@ -121,19 +121,6 @@ describe('POST /api/find-gifts', () => {
     expect(mockState.findGifts).not.toHaveBeenCalled();
   });
 
-  it('returns 200 with valid GiftResult when X-GiftMatch-Demo is true', async () => {
-    const res = await callHandler({
-      headers: { 'X-GiftMatch-Demo': 'true' },
-    });
-
-    expect(res.statusCode).toBe(200);
-    expect(mockState.findGifts).toHaveBeenCalledWith(validAnswers, { userId: undefined });
-    expect(res.body).toEqual({
-      ...giftResult,
-      rankedGifts: giftResult.recommendations,
-    });
-  });
-
   it('returns 200 with valid GiftResult when a bearer token is valid', async () => {
     const res = await callHandler({
       headers: { Authorization: 'Bearer valid-token' },
@@ -150,7 +137,6 @@ describe('POST /api/find-gifts', () => {
 
   it('returns 400 when answers are missing or malformed', async () => {
     const res = await callHandler({
-      headers: { 'X-GiftMatch-Demo': 'true' },
       body: { answers: { recipient: '', personality: 'creative', budget: '25-50' } },
     });
 
@@ -163,7 +149,7 @@ describe('POST /api/find-gifts', () => {
     mockState.findGifts.mockRejectedValueOnce(new Error('OpenAI unavailable'));
 
     const res = await callHandler({
-      headers: { 'X-GiftMatch-Demo': 'true' },
+      headers: { Authorization: 'Bearer valid-token' },
     });
 
     expect(res.statusCode).toBe(500);

@@ -5,7 +5,9 @@ import { z } from 'zod';
 const PROMPT_VERSION = 'giftmatch-rank-v1';
 const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const RATE_LIMIT_FALLBACK_MODEL = 'catalog-rate-limit-fallback-v1';
-const MAX_RECOMMENDATIONS = 6;
+const MAX_RECOMMENDATIONS = 5;
+const CATALOG_FETCH_LIMIT = 1000;
+const MODEL_CATALOG_LIMIT = 40;
 
 const answersSchema = z.object({
   recipient: z.string().trim().min(1),
@@ -352,7 +354,7 @@ async function fetchBudgetFilteredCatalog(range: BudgetRange): Promise<CatalogIt
     .from('catalog')
     .select('id, name, description, price, image_url, brand, category, subcategory')
     .order('price', { ascending: true })
-    .limit(40);
+    .limit(CATALOG_FETCH_LIMIT);
 
   if (typeof range.min === 'number') {
     query = query.gte('price', range.min);
@@ -486,6 +488,19 @@ function scoreCatalogItem(item: CatalogItem, keywords: string[], index: number) 
   );
 
   return 80 + matchScore - index * 0.5;
+}
+
+function selectCatalogForRanking(answers: z.infer<typeof answersSchema>, catalog: CatalogItem[]) {
+  const keywords = getFallbackKeywords(answers);
+
+  return catalog
+    .map((item, index) => ({
+      item,
+      score: scoreCatalogItem(item, keywords, index),
+    }))
+    .sort((left, right) => right.score - left.score || left.item.price - right.item.price)
+    .slice(0, MODEL_CATALOG_LIMIT)
+    .map(({ item }) => item);
 }
 
 function buildRateLimitFallbackOutput(
@@ -671,7 +686,7 @@ export async function findGifts(
   let failedRunPersisted = false;
 
   try {
-    catalog = await fetchBudgetFilteredCatalog(budgetRange);
+    catalog = selectCatalogForRanking(answers, await fetchBudgetFilteredCatalog(budgetRange));
 
     try {
       output = await rankCatalogWithModel(answers, catalog, model);
@@ -710,7 +725,21 @@ export async function findGifts(
       model = RATE_LIMIT_FALLBACK_MODEL;
     }
 
-    validateRankedItems(output, catalog);
+    try {
+      validateRankedItems(output, catalog);
+    } catch (error) {
+      if (catalog.length === 0) {
+        throw error;
+      }
+
+      console.warn(
+        'OpenAI returned recommendations outside the fetched catalog; using catalog fallback recommendations',
+        summarizeError(error),
+      );
+      output = buildRateLimitFallbackOutput(answers, catalog);
+      model = RATE_LIMIT_FALLBACK_MODEL;
+      validateRankedItems(output, catalog);
+    }
   } catch (error) {
     if (failedRunPersisted) {
       throw error;

@@ -28,10 +28,6 @@ function getBearerToken(req: VercelRequest): string | undefined {
   return match?.[1];
 }
 
-function isDemoRequest(req: VercelRequest): boolean {
-  return getHeader(req, 'x-giftmatch-demo')?.toLowerCase() === 'true';
-}
-
 function isValidAnswers(value: unknown): value is GiftAnswers {
   if (!value || typeof value !== 'object') {
     return false;
@@ -76,7 +72,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const requestBody = req.body as { answers?: GiftAnswers };
     const answers = requestBody.answers ?? (req.body as GiftAnswers);
-    const demoRequest = isDemoRequest(req);
 
     if (!isValidAnswers(answers)) {
       res.status(400).json({ error: 'Missing or malformed gift answers' });
@@ -85,26 +80,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const accessToken = getBearerToken(req);
 
-    if (!accessToken && !demoRequest) {
+    if (!accessToken) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
 
     let userId: string | undefined;
 
-    if (accessToken) {
-      const {
-        data: { user },
-        error,
-      } = await getSupabaseAuthClient().auth.getUser(accessToken);
+    const {
+      data: { user },
+      error,
+    } = await getSupabaseAuthClient().auth.getUser(accessToken);
 
-      if (error || !user) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-      }
-
-      userId = user.id;
+    if (error || !user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
+
+    userId = user.id;
 
     const result = await findGifts(answers, { userId });
 

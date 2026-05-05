@@ -114,6 +114,26 @@ function createInsertQuery(table: string, id: string) {
   return query;
 }
 
+function createSupabaseClient(catalogResult: unknown = { data: catalogItems, error: null }) {
+  return {
+    from: vi.fn((table: string) => {
+      if (table === 'catalog') {
+        return createThenableQuery(catalogResult);
+      }
+
+      if (table === 'quiz_runs') {
+        return createInsertQuery(table, 'quiz-run-1');
+      }
+
+      if (table === 'recommendation_runs') {
+        return createInsertQuery(table, 'recommendation-run-1');
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    }),
+  };
+}
+
 async function importService() {
   const module = await import('../services/findGifts.js');
   return module.findGifts;
@@ -133,23 +153,7 @@ beforeEach(() => {
     return { output_text: JSON.stringify(validModelOutput) };
   });
 
-  mockState.createClient.mockReturnValue({
-    from: vi.fn((table: string) => {
-      if (table === 'catalog') {
-        return createThenableQuery({ data: catalogItems, error: null });
-      }
-
-      if (table === 'quiz_runs') {
-        return createInsertQuery(table, 'quiz-run-1');
-      }
-
-      if (table === 'recommendation_runs') {
-        return createInsertQuery(table, 'recommendation-run-1');
-      }
-
-      throw new Error(`Unexpected table ${table}`);
-    }),
-  });
+  mockState.createClient.mockReturnValue(createSupabaseClient());
 });
 
 describe('findGifts', () => {
@@ -188,6 +192,25 @@ describe('findGifts', () => {
     await findGifts(answers, { userId: 'user-1' });
 
     expect(mockState.orderLog).toEqual(['catalog', 'openai']);
+    expect(mockState.limit).toHaveBeenCalledWith(1000);
+  });
+
+  it('returns an empty result without calling OpenAI when the budget has no catalog matches', async () => {
+    mockState.createClient.mockReturnValueOnce(createSupabaseClient({ data: [], error: null }));
+    const findGifts = await importService();
+
+    const result = await findGifts(answers, { userId: 'user-1' });
+
+    expect(mockState.responsesCreate).not.toHaveBeenCalled();
+    expect(result.recommendations).toEqual([]);
+    expect(result.summary).toContain('could not find catalog items inside that budget');
+    expect(mockState.inserts[1]).toMatchObject({
+      table: 'recommendation_runs',
+      payload: expect.objectContaining({
+        model: 'gpt-4o-mini',
+        ranked_output: expect.objectContaining({ recommendations: [] }),
+      }),
+    });
   });
 
   it('uses OPENAI_MODEL and falls back to gpt-4o-mini', async () => {
@@ -333,6 +356,38 @@ describe('findGifts', () => {
       payload: expect.objectContaining({
         model: 'catalog-rate-limit-fallback-v1',
         prompt_version: 'giftmatch-rank-v1',
+        ranked_output: expect.objectContaining({ recommendations: expect.any(Array) }),
+      }),
+    });
+  });
+
+  it('falls back to catalog ranking when OpenAI returns an unknown catalog item id', async () => {
+    mockState.responsesCreate.mockResolvedValueOnce({
+      output_text: JSON.stringify({
+        ...validModelOutput,
+        recommendations: [
+          {
+            ...validModelOutput.recommendations[0],
+            catalog_item_id: 'not-in-this-catalog',
+          },
+        ],
+      }),
+    });
+    const findGifts = await importService();
+
+    const result = await findGifts(answers, { userId: 'user-1' });
+
+    expect(result.model).toBe('catalog-rate-limit-fallback-v1');
+    expect(result.recommendations.length).toBeGreaterThan(0);
+    expect(
+      result.recommendations.every((item) =>
+        catalogItems.some((catalog) => catalog.id === item.catalog_item_id),
+      ),
+    ).toBe(true);
+    expect(mockState.inserts[1]).toMatchObject({
+      table: 'recommendation_runs',
+      payload: expect.objectContaining({
+        model: 'catalog-rate-limit-fallback-v1',
         ranked_output: expect.objectContaining({ recommendations: expect.any(Array) }),
       }),
     });

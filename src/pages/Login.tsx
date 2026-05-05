@@ -2,36 +2,57 @@ import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase.js';
 
+async function createConfirmedUser(username: string, password: string) {
+  const response = await fetch('/api/sign-up', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    const message =
+      typeof errorBody?.error === 'string' ? errorBody.error : 'Could not create user';
+    throw new Error(message);
+  }
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+    setNotice('');
     setIsSubmitting(true);
 
-    const authResponse = isSignUp
-      ? await supabase.auth.signUp({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password });
+    try {
+      if (isSignUp) {
+        await createConfirmedUser(email, password);
+        setNotice('Skipping verification for the demo');
+      }
 
-    setIsSubmitting(false);
+      const authResponse = await supabase.auth.signInWithPassword({ email, password });
 
-    if (authResponse.error) {
-      setError(authResponse.error.message);
-      return;
+      if (authResponse.error) {
+        setError(authResponse.error.message);
+        return;
+      }
+
+      window.setTimeout(() => {
+        navigate('/quiz', { replace: true });
+      }, isSignUp ? 900 : 0);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Could not sign in');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (isSignUp && !authResponse.data.session) {
-      setError('Please confirm your email before signing in.');
-      return;
-    }
-
-    navigate('/quiz', { replace: true });
   }
 
   return (
@@ -110,6 +131,12 @@ export function LoginPage() {
           {error ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
+            </div>
+          ) : null}
+
+          {notice ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {notice}
             </div>
           ) : null}
 
