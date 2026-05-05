@@ -107,6 +107,97 @@ class ModelOutputParseError extends Error {
   }
 }
 
+function serializeUnknown(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (typeof value === 'function' || typeof value === 'symbol') {
+    return String(value);
+  }
+
+  if (value instanceof Error) {
+    return summarizeError(value, seen);
+  }
+
+  if (typeof value !== 'object') {
+    return String(value);
+  }
+
+  if (seen.has(value)) {
+    return '[Circular]';
+  }
+
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => serializeUnknown(item, seen));
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entryValue]) => [key, serializeUnknown(entryValue, seen)]),
+  );
+}
+
+function summarizeError(error: unknown, seen = new WeakSet<object>()) {
+  if (!error || typeof error !== 'object') {
+    return { message: String(error) };
+  }
+
+  if (seen.has(error)) {
+    return { message: '[Circular]' };
+  }
+
+  seen.add(error);
+
+  const candidate = error as {
+    name?: unknown;
+    message?: unknown;
+    code?: unknown;
+    status?: unknown;
+    type?: unknown;
+    stack?: unknown;
+    cause?: unknown;
+    response?: unknown;
+    error?: unknown;
+  };
+
+  const detailEntries = Object.entries(candidate)
+    .filter(
+      ([key, value]) =>
+        !['name', 'message', 'code', 'status', 'type', 'stack', 'cause', 'response', 'error'].includes(
+          key,
+        ) && value !== undefined,
+    )
+    .map(([key, value]) => [key, serializeUnknown(value, seen)]);
+
+  return {
+    name: typeof candidate.name === 'string' ? candidate.name : undefined,
+    message: typeof candidate.message === 'string' ? candidate.message : undefined,
+    code: typeof candidate.code === 'string' ? candidate.code : undefined,
+    status: typeof candidate.status === 'number' ? candidate.status : undefined,
+    type: typeof candidate.type === 'string' ? candidate.type : undefined,
+    stack: typeof candidate.stack === 'string' ? candidate.stack : undefined,
+    cause: serializeUnknown(candidate.cause, seen),
+    response: serializeUnknown(candidate.response, seen),
+    error: serializeUnknown(candidate.error, seen),
+    details: Object.fromEntries(detailEntries),
+  };
+}
+
 function getEnv(name: string): string | undefined {
   return process.env[name] || undefined;
 }
@@ -451,11 +542,12 @@ function validateRankedItems(output: z.infer<typeof modelOutputSchema>, catalog:
   }
 }
 
-async function persistRuns(params: {
+async function persistRunRecord(params: {
   answers: z.infer<typeof answersSchema>;
   budgetRange: BudgetRange;
   model: string;
-  output: z.infer<typeof modelOutputSchema>;
+  rankedOutput: unknown;
+  summary: string | null;
   userId?: string;
 }) {
   const supabase = getSupabaseAdmin();
@@ -487,8 +579,8 @@ async function persistRuns(params: {
       quiz_run_id: quizRun.id,
       model: params.model,
       prompt_version: PROMPT_VERSION,
-      ranked_output: params.output,
-      summary: params.output.summary,
+      ranked_output: params.rankedOutput,
+      summary: params.summary,
     })
     .select('id')
     .single();
@@ -503,6 +595,69 @@ async function persistRuns(params: {
   };
 }
 
+async function persistRuns(params: {
+  answers: z.infer<typeof answersSchema>;
+  budgetRange: BudgetRange;
+  model: string;
+  output: z.infer<typeof modelOutputSchema>;
+  userId?: string;
+}) {
+  return persistRunRecord({
+    answers: params.answers,
+    budgetRange: params.budgetRange,
+    model: params.model,
+    rankedOutput: params.output,
+    summary: params.output.summary,
+    userId: params.userId,
+  });
+}
+
+async function persistFailedRun(params: {
+  answers: z.infer<typeof answersSchema>;
+  budgetRange: BudgetRange;
+  model: string;
+  stage: string;
+  error: unknown;
+  userId?: string;
+}) {
+  const errorDetails = summarizeError(params.error);
+  const summary = errorDetails.message
+    ? `Discovery failed during ${params.stage}: ${errorDetails.message}`
+    : `Discovery failed during ${params.stage}`;
+
+  return persistRunRecord({
+    answers: params.answers,
+    budgetRange: params.budgetRange,
+    model: params.model,
+    rankedOutput: {
+      status: 'error',
+      stage: params.stage,
+      prompt_version: PROMPT_VERSION,
+      answers: params.answers,
+      budget: params.budgetRange,
+      model: params.model,
+      error: errorDetails,
+    },
+    summary,
+    userId: params.userId,
+  });
+}
+
+async function persistFailedRunBestEffort(params: {
+  answers: z.infer<typeof answersSchema>;
+  budgetRange: BudgetRange;
+  model: string;
+  stage: string;
+  error: unknown;
+  userId?: string;
+}) {
+  try {
+    await persistFailedRun(params);
+  } catch (persistError) {
+    console.error('Could not persist failed discovery run', summarizeError(persistError));
+  }
+}
+
 export async function findGifts(
   rawAnswers: GiftAnswers,
   options: FindGiftsOptions = {},
@@ -510,24 +665,78 @@ export async function findGifts(
   const answers = answersSchema.parse(rawAnswers);
   const budgetRange = parseBudgetRange(answers.budget);
   let model = getOpenAIModel();
-  const catalog = await fetchBudgetFilteredCatalog(budgetRange);
+  let catalog: CatalogItem[] = [];
   let output: z.infer<typeof modelOutputSchema>;
+  let failedRunPersisted = false;
 
   try {
-    output = await rankCatalogWithModel(answers, catalog, model);
-  } catch (error) {
-    const shouldUseFallback = isRateLimitError(error) || isModelOutputParseError(error);
+    catalog = await fetchBudgetFilteredCatalog(budgetRange);
 
-    if (!shouldUseFallback) {
+    try {
+      output = await rankCatalogWithModel(answers, catalog, model);
+    } catch (error) {
+      if (isModelOutputParseError(error)) {
+        await persistFailedRunBestEffort({
+          answers,
+          budgetRange,
+          model,
+          stage: 'model_output_parse',
+          error,
+          userId: options.userId,
+        });
+        failedRunPersisted = true;
+        throw error;
+      }
+
+      if (!isRateLimitError(error)) {
+        await persistFailedRunBestEffort({
+          answers,
+          budgetRange,
+          model,
+          stage: 'model_ranking',
+          error,
+          userId: options.userId,
+        });
+        failedRunPersisted = true;
+        throw error;
+      }
+
+      console.warn(
+        'OpenAI ranking unavailable; using catalog fallback recommendations',
+        summarizeError(error),
+      );
+      output = buildRateLimitFallbackOutput(answers, catalog);
+      model = RATE_LIMIT_FALLBACK_MODEL;
+    }
+
+    validateRankedItems(output, catalog);
+  } catch (error) {
+    if (failedRunPersisted) {
       throw error;
     }
 
-    console.warn('OpenAI ranking unavailable; using catalog fallback recommendations', error);
-    output = buildRateLimitFallbackOutput(answers, catalog);
-    model = RATE_LIMIT_FALLBACK_MODEL;
-  }
+    if (catalog.length === 0) {
+      await persistFailedRunBestEffort({
+        answers,
+        budgetRange,
+        model,
+        stage: 'catalog_fetch',
+        error,
+        userId: options.userId,
+      });
+    } else if (!(isModelOutputParseError(error) || isRateLimitError(error))) {
+      await persistFailedRunBestEffort({
+        answers,
+        budgetRange,
+        model,
+        stage: 'recommendation_validation',
+        error,
+        userId: options.userId,
+      });
+    }
 
-  validateRankedItems(output, catalog);
+    throw error;
+  }
 
   const runs = await persistRuns({
     answers,

@@ -79,6 +79,7 @@ function buildCompleteAnswers(answers: Partial<QuizAnswers>, freeText: string): 
 export function QuizPage() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>('quiz');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Partial<QuizAnswers>>({});
   const [freeText, setFreeText] = useState('');
   const [result, setResult] = useState<GiftResult | null>(null);
@@ -129,10 +130,14 @@ export function QuizPage() {
 
   function handleSelect(key: AnswerKey, value: string) {
     setAnswers((currentAnswers) => ({ ...currentAnswers, [key]: value }));
+    setCurrentQuestionIndex((currentIndex) =>
+      currentIndex < questions.length ? currentIndex + 1 : currentIndex,
+    );
   }
 
   function startOver() {
     setPhase('quiz');
+    setCurrentQuestionIndex(0);
     setAnswers({});
     setFreeText('');
     setResult(null);
@@ -153,77 +158,86 @@ export function QuizPage() {
         ) : null}
 
         <div className="mt-6 space-y-10">
-          {questions.map((question, index) => (
-            <div key={question.key}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Question {index + 1} of 4
-              </p>
-              <h1 className="mb-6 mt-2 text-xl font-semibold text-gray-900">{question.heading}</h1>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {question.options.map((option) => {
-                  const isSelected = answers[question.key] === option.value;
+          {questions.map((question, index) =>
+            index === currentQuestionIndex ? (
+              <div key={question.key}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Question {index + 1} of 4
+                </p>
+                <h1 className="mb-6 mt-2 text-xl font-semibold text-gray-900">
+                  {question.heading}
+                </h1>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {question.options.map((option) => {
+                    const isSelected = answers[question.key] === option.value;
 
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => handleSelect(question.key, option.value)}
-                      className={[
-                        'cursor-pointer rounded-xl border border-gray-200 p-4 text-center transition hover:border-gray-400',
-                        isSelected
-                          ? 'border-gray-900 bg-gray-50 font-semibold'
-                          : 'bg-white text-gray-700',
-                      ].join(' ')}
-                    >
-                      <span className="block text-3xl" aria-hidden="true">
-                        {option.emoji}
-                      </span>
-                      <span className="mt-3 block text-sm">{option.label}</span>
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleSelect(question.key, option.value)}
+                        className={[
+                          'cursor-pointer rounded-xl border border-gray-200 p-4 text-center transition hover:border-gray-400',
+                          isSelected
+                            ? 'border-gray-900 bg-gray-50 font-semibold'
+                            : 'bg-white text-gray-700',
+                        ].join(' ')}
+                      >
+                        <span className="block text-3xl" aria-hidden="true">
+                          {option.emoji}
+                        </span>
+                        <span className="mt-3 block text-sm">{option.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null,
+          )}
+
+          {currentQuestionIndex === questions.length ? (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Question 4 of 4
+              </p>
+              <label
+                htmlFor="free-text-answer"
+                className="mb-6 mt-2 block text-xl font-semibold text-gray-900"
+              >
+                Anything else we should know?
+              </label>
+              <textarea
+                id="free-text-answer"
+                value={freeText}
+                maxLength={maxFreeTextLength}
+                onChange={(event) => setFreeText(event.target.value)}
+                rows={7}
+                className="w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
+                placeholder="Favorite hobbies, things they already own, delivery notes..."
+              />
+              <p className="mt-2 text-right text-xs text-gray-400">
+                {freeText.length}/{maxFreeTextLength}
+              </p>
+              <div className="mt-5 flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={phase === 'loading'}
+                  onClick={() => submitQuiz(freeText.trim())}
+                  className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  {phase === 'loading' ? 'Finding...' : 'Continue'}
+                </button>
+                <button
+                  type="button"
+                  disabled={phase === 'loading'}
+                  onClick={() => submitQuiz('')}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition hover:border-gray-900 hover:text-gray-900 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+                >
+                  Skip
+                </button>
               </div>
             </div>
-          ))}
-
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Question 4 of 4
-            </p>
-            <label htmlFor="free-text-answer" className="mb-6 mt-2 block text-xl font-semibold text-gray-900">
-            Anything else we should know?
-          </label>
-          <textarea
-            id="free-text-answer"
-            value={freeText}
-            maxLength={maxFreeTextLength}
-            onChange={(event) => setFreeText(event.target.value)}
-            rows={7}
-            className="w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
-            placeholder="Favorite hobbies, things they already own, delivery notes..."
-          />
-          <p className="mt-2 text-right text-xs text-gray-400">
-            {freeText.length}/{maxFreeTextLength}
-          </p>
-          <div className="mt-5 flex items-center gap-3">
-            <button
-              type="button"
-              disabled={phase === 'loading'}
-              onClick={() => submitQuiz(freeText.trim())}
-              className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
-            >
-              {phase === 'loading' ? 'Finding...' : 'Continue'}
-            </button>
-            <button
-              type="button"
-              disabled={phase === 'loading'}
-              onClick={() => submitQuiz('')}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition hover:border-gray-900 hover:text-gray-900 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
-            >
-              Skip
-            </button>
-          </div>
-        </div>
+          ) : null}
         </div>
       </div>
 

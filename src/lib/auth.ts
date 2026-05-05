@@ -23,17 +23,15 @@ export async function checkAdmin(): Promise<boolean> {
     return false;
   }
 
-  const response = await fetch('/api/admin-status', {
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', session.user.id)
+    .single();
 
-  if (!response.ok) {
+  if (error) {
     return false;
   }
 
-  const body = (await response.json().catch(() => null)) as { isAdmin?: boolean } | null;
-
-  return body?.isAdmin === true;
+  return profile?.role === 'admin';
 }

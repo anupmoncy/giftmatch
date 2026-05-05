@@ -16,7 +16,9 @@ type VercelResponse = {
 };
 
 function getHeader(req: VercelRequest, name: string): string | undefined {
-  const value = req.headers[name] ?? req.headers[name.toLowerCase()];
+  const headerName = name.toLowerCase();
+  const matchingKey = Object.keys(req.headers).find((key) => key.toLowerCase() === headerName);
+  const value = matchingKey ? req.headers[matchingKey] : undefined;
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -24,6 +26,28 @@ function getBearerToken(req: VercelRequest): string | undefined {
   const authorization = getHeader(req, 'authorization');
   const match = authorization?.match(/^Bearer\s+(.+)$/i);
   return match?.[1];
+}
+
+function isDemoRequest(req: VercelRequest): boolean {
+  return getHeader(req, 'x-giftmatch-demo')?.toLowerCase() === 'true';
+}
+
+function isValidAnswers(value: unknown): value is GiftAnswers {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<Record<keyof GiftAnswers, unknown>>;
+
+  return (
+    typeof candidate.recipient === 'string' &&
+    candidate.recipient.trim().length > 0 &&
+    typeof candidate.personality === 'string' &&
+    candidate.personality.trim().length > 0 &&
+    typeof candidate.budget === 'string' &&
+    candidate.budget.trim().length > 0 &&
+    (candidate.freeText === undefined || typeof candidate.freeText === 'string')
+  );
 }
 
 function getSupabaseAuthClient() {
@@ -52,27 +76,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const requestBody = req.body as { answers?: GiftAnswers };
     const answers = requestBody.answers ?? (req.body as GiftAnswers);
+    const demoRequest = isDemoRequest(req);
+
+    if (!isValidAnswers(answers)) {
+      res.status(400).json({ error: 'Missing or malformed gift answers' });
+      return;
+    }
 
     const accessToken = getBearerToken(req);
 
-    if (!accessToken) {
+    if (!accessToken && !demoRequest) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
 
-    const {
-      data: { user },
-      error,
-    } = await getSupabaseAuthClient().auth.getUser(accessToken);
+    let userId: string | undefined;
 
-    if (error || !user) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
+    if (accessToken) {
+      const {
+        data: { user },
+        error,
+      } = await getSupabaseAuthClient().auth.getUser(accessToken);
+
+      if (error || !user) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      userId = user.id;
     }
 
-    const result = await findGifts(answers, { userId: user.id });
+    const result = await findGifts(answers, { userId });
 
-    res.status(200).json(result);
+    res.status(200).json({
+      ...result,
+      rankedGifts: result.recommendations,
+    });
   } catch (error) {
     console.error('find-gifts failed', error);
     res.status(500).json({ error: 'Could not find gifts' });

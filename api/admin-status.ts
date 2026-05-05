@@ -17,7 +17,9 @@ function getEnv(name: string): string | undefined {
 }
 
 function getHeader(req: VercelRequest, name: string): string | undefined {
-  const value = req.headers[name] ?? req.headers[name.toLowerCase()];
+  const headerName = name.toLowerCase();
+  const matchingKey = Object.keys(req.headers).find((key) => key.toLowerCase() === headerName);
+  const value = matchingKey ? req.headers[matchingKey] : undefined;
   return Array.isArray(value) ? value[0] : value;
 }
 

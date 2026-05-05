@@ -29,7 +29,9 @@ function getEnv(name: string): string | undefined {
 }
 
 function getHeader(req: VercelRequest, name: string): string | undefined {
-  const value = req.headers[name] ?? req.headers[name.toLowerCase()];
+  const headerName = name.toLowerCase();
+  const matchingKey = Object.keys(req.headers).find((key) => key.toLowerCase() === headerName);
+  const value = matchingKey ? req.headers[matchingKey] : undefined;
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -170,12 +172,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       recommendationsByQuizRunId.set(recommendationRun.quiz_run_id, currentRuns);
     }
 
-    res.status(200).json({
-      quizRuns: (quizRuns ?? []).map((quizRun) => ({
+    const shapedRuns = (quizRuns ?? []).map((quizRun) => {
+      const profile = profilesByUserId.get(quizRun.user_id) ?? null;
+      const recommendationRuns = recommendationsByQuizRunId.get(quizRun.id) ?? [];
+      const latestRecommendationRun = recommendationRuns[0] ?? null;
+
+      return {
         ...quizRun,
-        profiles: profilesByUserId.get(quizRun.user_id) ?? null,
-        recommendation_runs: recommendationsByQuizRunId.get(quizRun.id) ?? [],
-      })),
+        email: profile?.email ?? null,
+        model: latestRecommendationRun?.model ?? null,
+        summary: latestRecommendationRun?.summary ?? null,
+        profiles: profile,
+        recommendation_runs: recommendationRuns,
+      };
+    });
+
+    res.status(200).json({
+      runs: shapedRuns,
+      quizRuns: shapedRuns,
     });
   } catch (error) {
     console.error('admin-runs failed', error);

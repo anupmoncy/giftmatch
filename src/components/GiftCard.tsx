@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 import type { GiftRecommendation } from '../services/findGifts.js';
 
@@ -25,7 +25,14 @@ export function GiftCard({ gift, recommendationRunId }: GiftCardProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [imageFailed, setImageFailed] = useState(false);
   const score = Math.max(0, Math.min(100, Math.round(gift.score)));
+  const imageUrl = gift.item.image_url?.trim();
+  const showImage = Boolean(imageUrl) && !imageFailed;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
 
   async function saveGift() {
     setError('');
@@ -61,12 +68,13 @@ export function GiftCard({ gift, recommendationRunId }: GiftCardProps) {
 
   return (
     <article className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      {gift.item.image_url ? (
+      {showImage ? (
         <img
-          src={gift.item.image_url}
+          src={imageUrl}
           alt={gift.item.name}
-          className="aspect-square w-full rounded-lg object-cover"
+          className="block aspect-square w-full rounded-lg bg-gray-100 object-cover"
           loading="lazy"
+          onError={() => setImageFailed(true)}
         />
       ) : (
         <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-gray-100 text-sm text-gray-400">
