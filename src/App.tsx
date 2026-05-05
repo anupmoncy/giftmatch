@@ -4,6 +4,7 @@ import { AdminPage } from './pages/Admin.js';
 import { HistoryPage } from './pages/History.js';
 import { LoginPage } from './pages/Login.js';
 import { QuizPage } from './pages/Quiz.js';
+import { SavedCatalogPage } from './pages/SavedCatalog.js';
 
 function AppShell() {
   const location = useLocation();
@@ -17,6 +18,7 @@ function AppShell() {
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/quiz" element={<QuizPage />} />
+          <Route path="/catalog" element={<SavedCatalogPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/quiz" replace />} />

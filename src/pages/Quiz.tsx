@@ -252,7 +252,7 @@ export function QuizPage() {
 
         <p className="mt-1 text-sm text-gray-400">Ideal wait is around 10 seconds</p>
 
-        <p className="mt-8 text-xs tracking-widest text-gray-300" aria-live="polite">
+        <p className="mt-8 text-lg font-semibold tracking-wide text-gray-500" aria-live="polite">
           {loadingElapsedSeconds}s
         </p>
 

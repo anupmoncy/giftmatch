@@ -64,6 +64,17 @@ export function NavBar() {
           >
             My history
           </NavLink>
+          <NavLink
+            to="/catalog"
+            className={({ isActive }) =>
+              [
+                'text-sm transition hover:text-gray-900',
+                isActive ? 'font-semibold text-indigo-600' : 'text-gray-400',
+              ].join(' ')
+            }
+          >
+            Saved gifts
+          </NavLink>
           {isAdmin ? (
             <NavLink
               to="/admin"
