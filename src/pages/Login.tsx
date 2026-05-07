@@ -18,6 +18,10 @@ async function createConfirmedUser(username: string, password: string) {
   }
 }
 
+function isFetchFailure(error: unknown) {
+  return error instanceof TypeError && error.message.toLowerCase().includes('fetch');
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
@@ -35,7 +39,14 @@ export function LoginPage() {
 
     try {
       if (isSignUp) {
-        await createConfirmedUser(username, password);
+        try {
+          await createConfirmedUser(username, password);
+        } catch (signUpError) {
+          if (!isFetchFailure(signUpError)) {
+            throw signUpError;
+          }
+        }
+
         setNotice('Skipping verification for the demo');
       }
 
