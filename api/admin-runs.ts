@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 type VercelRequest = {
   method?: string;
   headers: Record<string, string | string[] | undefined>;
+  query?: Record<string, string | string[] | undefined>;
 };
 
 type VercelResponse = {
@@ -39,6 +40,26 @@ function getBearerToken(req: VercelRequest): string | undefined {
   const authorization = getHeader(req, 'authorization');
   const match = authorization?.match(/^Bearer\s+(.+)$/i);
   return match?.[1];
+}
+
+function getQueryValue(req: VercelRequest, name: string): string | undefined {
+  const value = req.query?.[name];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getPositiveInteger(value: string | undefined, fallback: number, max: number) {
+  const parsed = Number.parseInt(value ?? '', 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return Math.min(parsed, max);
+}
+
+function getOffset(value: string | undefined) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function getSupabaseUrl() {
@@ -122,10 +143,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const { data: quizRuns, error: quizError } = await supabaseAdmin
+    const limit = getPositiveInteger(getQueryValue(req, 'limit'), 10, 50);
+    const offset = getOffset(getQueryValue(req, 'offset'));
+
+    const {
+      data: quizRuns,
+      error: quizError,
+      count,
+    } = await supabaseAdmin
       .from('quiz_runs')
-      .select('id, created_at, user_id, recipient, personality, budget, free_text')
-      .order('created_at', { ascending: false });
+      .select('id, created_at, user_id, recipient, personality, budget, free_text', {
+        count: 'exact',
+      })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (quizError) {
       throw quizError;
@@ -190,6 +221,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json({
       runs: shapedRuns,
       quizRuns: shapedRuns,
+      total: count ?? shapedRuns.length,
+      limit,
+      offset,
     });
   } catch (error) {
     console.error('admin-runs failed', error);

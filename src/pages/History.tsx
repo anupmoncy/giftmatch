@@ -4,6 +4,8 @@ import { formatDateTime } from '../lib/formatters.js';
 import { supabase } from '../lib/supabase.js';
 import { asArray } from '../lib/supabaseJoins.js';
 
+const pageSize = 10;
+
 type RecommendationRun = {
   id: string;
   model: string | null;
@@ -87,6 +89,8 @@ function getRankedRecommendations(rankedOutput: unknown): RankedRecommendation[]
 export function HistoryPage() {
   const navigate = useNavigate();
   const [quizRuns, setQuizRuns] = useState<QuizRunRow[]>([]);
+  const [page, setPage] = useState(0);
+  const [totalRuns, setTotalRuns] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -109,12 +113,14 @@ export function HistoryPage() {
           return;
         }
 
-        const { data, error: historyError } = await supabase
+        const { data, error: historyError, count } = await supabase
           .from('quiz_runs')
           .select(
             'id, created_at, recipient, personality, budget, free_text, recommendation_runs(id, model, summary, ranked_output, created_at)',
+            { count: 'exact' },
           )
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .range(page * pageSize, page * pageSize + pageSize - 1);
 
         if (historyError) {
           throw historyError;
@@ -122,6 +128,7 @@ export function HistoryPage() {
 
         if (isMounted) {
           setQuizRuns((data ?? []) as QuizRunRow[]);
+          setTotalRuns(count ?? 0);
         }
       } catch (loadError) {
         if (isMounted) {
@@ -139,7 +146,9 @@ export function HistoryPage() {
     return () => {
       isMounted = false;
     };
-  }, [navigate]);
+  }, [navigate, page]);
+
+  const totalPages = Math.max(1, Math.ceil(totalRuns / pageSize));
 
   return (
     <section className="mx-auto max-w-5xl px-4 pb-16 pt-12">
@@ -238,6 +247,32 @@ export function HistoryPage() {
               </article>
             );
           })}
+          <div className="flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-gray-500">
+              Showing {page * pageSize + 1}-{Math.min((page + 1) * pageSize, totalRuns)} of{' '}
+              {totalRuns}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((currentPage) => Math.max(0, currentPage - 1))}
+                disabled={page === 0}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setPage((currentPage) => Math.min(totalPages - 1, currentPage + 1))
+                }
+                disabled={page >= totalPages - 1}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

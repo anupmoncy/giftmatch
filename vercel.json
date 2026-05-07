@@ -21,8 +21,17 @@
       "destination": "/api/admin-status.ts"
     },
     {
+      "source": "/api/admin-users",
+      "destination": "/api/admin-users.ts"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/find-gifts.ts": {
+      "maxDuration": 15
+    }
+  }
 }
