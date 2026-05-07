@@ -5,6 +5,14 @@ GiftMatch is an AI-assisted gift discovery app for finding, saving, and reviewin
 - Individual users: create an account, run gift searches, save gift ideas, and review personal history.
 - Admin users: review all recommendation runs and manage user access.
 
+## How to Use This Manual
+
+Use this README as the operating guide for GiftMatch.
+
+- Individual users should start with **Getting Started** and **Individual User Guide**.
+- Admin users should also read **Admin User Guide** for history review and user management.
+- Developers or operators should use **Admin API Behavior**, **Troubleshooting**, and **Local Development**.
+
 ## Pages
 
 | Page | Route | Who can use it | Purpose |
@@ -181,6 +189,19 @@ The admin tools use authenticated API routes:
 - `/api/admin-status`: checks whether the current signed-in user is an admin.
 
 Requests require a valid signed-in session. Non-admin users receive a forbidden response.
+
+## MCP API Example
+
+GiftMatch also exposes an MCP endpoint that can call the `find_gifts` tool. Use this request to test gift search through the deployed MCP API:
+
+```bash
+curl -X POST https://giftmatch-kappa.vercel.app/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"find_gifts","arguments":{"recipient":"partner","personality":"techie","budget":"50to100","freeText":"loves gadgets"}}}'
+```
+
+The response returns JSON-RPC tool output with gift recommendations, recommendation metadata, and any fallback behavior used by the service.
 
 ## Troubleshooting
 

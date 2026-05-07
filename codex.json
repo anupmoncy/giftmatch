@@ -2,7 +2,7 @@
   "mcpServers": {
     "giftmatch": {
       "type": "url",
-      "url": "YOUR_VERCEL_URL/api/mcp"
+      "url": "https://giftmatch-kappa.vercel.app/api/mcp"
     }
   }
 }
