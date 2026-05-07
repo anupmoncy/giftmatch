@@ -4,6 +4,7 @@ const mockState = vi.hoisted(() => ({
   createClient: vi.fn(),
   authGetUser: vi.fn(),
   adminGetUserById: vi.fn(),
+  adminListUsers: vi.fn(),
   adminUpdateUserById: vi.fn(),
   role: 'user',
   quizRuns: [] as Array<Record<string, unknown>>,
@@ -65,6 +66,7 @@ function makeAdminClient() {
     auth: {
       admin: {
         getUserById: mockState.adminGetUserById,
+        listUsers: mockState.adminListUsers,
         updateUserById: mockState.adminUpdateUserById,
       },
     },
@@ -77,6 +79,7 @@ function makeAdminClient() {
           order: vi.fn().mockReturnThis(),
           limit: vi.fn().mockReturnThis(),
           ilike: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({ data: { role: mockState.role }, error: null }),
           then(resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) {
             return Promise.resolve({ data: mockState.profiles, error: null }).then(resolve, reject);
@@ -155,6 +158,20 @@ beforeEach(() => {
   });
   mockState.adminGetUserById.mockResolvedValue({
     data: { user: { id: 'user-1', email: 'friend@example.com' } },
+    error: null,
+  });
+  mockState.adminListUsers.mockResolvedValue({
+    data: {
+      users: [
+        {
+          id: 'user-1',
+          email: 'friend@example.com',
+          banned_until: null,
+          created_at: '2026-05-05T00:00:00.000Z',
+          last_sign_in_at: '2026-05-06T00:00:00.000Z',
+        },
+      ],
+    },
     error: null,
   });
   mockState.adminUpdateUserById.mockResolvedValue({
@@ -263,6 +280,24 @@ describe('GET /api/admin-users', () => {
       },
       error: null,
     });
+
+    const res = await callUsersHandler({ headers: { Authorization: 'Bearer admin-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockState.adminListUsers).toHaveBeenCalledWith({ page: 1, perPage: 100 });
+    expect((res.body as { users: Array<Record<string, unknown>> }).users).toEqual([
+      expect.objectContaining({
+        id: 'user-1',
+        email: 'friend@example.com',
+        role: 'user',
+        access: 'active',
+      }),
+    ]);
+  });
+
+  it('lists auth users even when their profile row is missing', async () => {
+    mockState.role = 'admin';
+    mockState.profiles = [];
 
     const res = await callUsersHandler({ headers: { Authorization: 'Bearer admin-token' } });
 

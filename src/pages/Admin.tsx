@@ -70,7 +70,8 @@ export function AdminPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const [historyError, setHistoryError] = useState('');
+  const [usersError, setUsersError] = useState('');
   const totalHistoryPages = Math.max(1, Math.ceil(totalQuizRuns / pageSize));
 
   useEffect(() => {
@@ -79,7 +80,7 @@ export function AdminPage() {
     async function loadAdminData() {
       try {
         setIsHistoryLoading(true);
-        setError('');
+        setHistoryError('');
         const {
           data: { session },
           error: sessionError,
@@ -120,7 +121,9 @@ export function AdminPage() {
         }
       } catch (loadError) {
         if (isMounted) {
-          setError(loadError instanceof Error ? loadError.message : 'Could not load admin data.');
+          setHistoryError(
+            loadError instanceof Error ? loadError.message : 'Could not load admin data.',
+          );
         }
       } finally {
         if (isMounted) {
@@ -168,7 +171,7 @@ export function AdminPage() {
 
   async function loadUsers() {
     setIsUsersLoading(true);
-    setError('');
+    setUsersError('');
 
     try {
       const accessToken = await getAccessToken();
@@ -201,7 +204,7 @@ export function AdminPage() {
 
       setUsers(body.users ?? []);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load users.');
+      setUsersError(loadError instanceof Error ? loadError.message : 'Could not load users.');
     } finally {
       setIsUsersLoading(false);
     }
@@ -209,7 +212,7 @@ export function AdminPage() {
 
   async function updateUser(userId: string, updates: { role?: AdminUser['role']; access?: AdminUser['access'] }) {
     setUpdatingUserId(userId);
-    setError('');
+    setUsersError('');
 
     try {
       const accessToken = await getAccessToken();
@@ -234,7 +237,7 @@ export function AdminPage() {
 
       await loadUsers();
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : 'Could not update user.');
+      setUsersError(updateError instanceof Error ? updateError.message : 'Could not update user.');
     } finally {
       setUpdatingUserId(null);
     }
@@ -274,9 +277,9 @@ export function AdminPage() {
         <div className="flex min-h-64 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
         </div>
-      ) : error ? (
+      ) : activeTab === 'history' && historyError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
+          {historyError}
         </div>
       ) : activeTab === 'history' ? (
         <div className="overflow-x-auto">
@@ -380,6 +383,12 @@ export function AdminPage() {
         </div>
       ) : (
         <div>
+          {usersError ? (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {usersError}
+            </div>
+          ) : null}
+
           <div className="mb-4 max-w-md">
             <label htmlFor="admin-user-search" className="sr-only">
               Search users

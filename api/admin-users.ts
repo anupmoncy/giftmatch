@@ -21,6 +21,14 @@ type ProfileRow = {
   role: UserRole;
 };
 
+type AuthUserRow = {
+  id: string;
+  email?: string | null;
+  banned_until?: string | null;
+  created_at?: string | null;
+  last_sign_in_at?: string | null;
+};
+
 type UpdateBody = {
   userId?: unknown;
   role?: unknown;
@@ -149,37 +157,51 @@ async function listUsers(req: VercelRequest, res: VercelResponse) {
   }
 
   const search = getQueryValue(req, 'search')?.trim() ?? '';
-  const baseQuery = admin.supabaseAdmin
-    .from('profiles')
-    .select('id, email, role')
-    .order('email', { ascending: true })
-    .limit(50);
+  const {
+    data: { users: authUsers },
+    error: authUsersError,
+  } = await admin.supabaseAdmin.auth.admin.listUsers({
+    page: 1,
+    perPage: 100,
+  });
 
-  const { data: profiles, error } = search
-    ? await baseQuery.ilike('email', `%${search}%`)
-    : await baseQuery;
-
-  if (error) {
-    throw error;
+  if (authUsersError) {
+    throw authUsersError;
   }
 
-  const authUsers = await Promise.all(
-    ((profiles ?? []) as ProfileRow[]).map(async (profile) => {
-      const {
-        data: { user },
-        error: authUserError,
-      } = await admin.supabaseAdmin.auth.admin.getUserById(profile.id);
+  const filteredAuthUsers = ((authUsers ?? []) as AuthUserRow[])
+    .filter((user) => !search || (user.email ?? '').toLowerCase().includes(search.toLowerCase()))
+    .slice(0, 50);
+  const userIds = filteredAuthUsers.map((user) => user.id);
+
+  const { data: profiles, error: profilesError } =
+    userIds.length > 0
+      ? await admin.supabaseAdmin.from('profiles').select('id, email, role').in('id', userIds)
+      : { data: [] as ProfileRow[], error: null };
+
+  if (profilesError) {
+    throw profilesError;
+  }
+
+  const profilesById = new Map(
+    ((profiles ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]),
+  );
+  const users = filteredAuthUsers
+    .map((user) => {
+      const profile = profilesById.get(user.id);
 
       return {
-        ...profile,
-        access: authUserError || !user || isRevoked(user.banned_until) ? 'revoked' : 'active',
-        created_at: user?.created_at ?? null,
-        last_sign_in_at: user?.last_sign_in_at ?? null,
+        id: user.id,
+        email: profile?.email ?? user.email ?? null,
+        role: profile?.role ?? 'user',
+        access: isRevoked(user.banned_until) ? 'revoked' : 'active',
+        created_at: user.created_at ?? null,
+        last_sign_in_at: user.last_sign_in_at ?? null,
       };
-    }),
-  );
+    })
+    .sort((left, right) => (left.email ?? '').localeCompare(right.email ?? ''));
 
-  res.status(200).json({ users: authUsers });
+  res.status(200).json({ users });
 }
 
 async function updateUser(req: VercelRequest, res: VercelResponse) {
