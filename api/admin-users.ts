@@ -17,7 +17,6 @@ type UserRole = 'user' | 'admin';
 
 type ProfileRow = {
   id: string;
-  email: string | null;
   role: UserRole;
 };
 
@@ -176,7 +175,7 @@ async function listUsers(req: VercelRequest, res: VercelResponse) {
 
   const { data: profiles, error: profilesError } =
     userIds.length > 0
-      ? await admin.supabaseAdmin.from('profiles').select('id, email, role').in('id', userIds)
+      ? await admin.supabaseAdmin.from('profiles').select('id, role').in('id', userIds)
       : { data: [] as ProfileRow[], error: null };
 
   if (profilesError) {
@@ -192,7 +191,7 @@ async function listUsers(req: VercelRequest, res: VercelResponse) {
 
       return {
         id: user.id,
-        email: profile?.email ?? user.email ?? null,
+        email: user.email ?? null,
         role: profile?.role ?? 'user',
         access: isRevoked(user.banned_until) ? 'revoked' : 'active',
         created_at: user.created_at ?? null,
